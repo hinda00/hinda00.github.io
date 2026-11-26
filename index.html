@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hind Azegrouz</title>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#fff,#0d0e18);--ink:light-dark(#14110f,#eceef6);--mute:light-dark(#5d616c,#a3a8b8);--line:light-dark(#e2e3ea,#2a2d40);--blue:light-dark(#1d2bd8,#8b95ff);--panel:light-dark(#f4f5fb,#161827)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.55 Inter,system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:clamp(32px,7vw,88px) max(5vw,16px)}
+h1{font:600 clamp(36px,6vw,56px)/1.05 Spectral,Georgia,serif;letter-spacing:-.02em;margin:0 0 10px}
+p{color:var(--mute);margin:0 0 32px}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;min-height:44px}
+a.card:hover,a.card:focus-visible{border-color:var(--blue);outline:none}
+a.card b{display:block;font-size:20px;color:var(--blue);margin-bottom:4px}
+a.card span{color:var(--mute);font-size:16px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Hind Azegrouz</h1>
+  <p>Tools and demos.</p>
+  <a class="card" href="llm-memory-calculator/"><b>LLM memory calculator</b><span>How much memory a model needs on a Xeon server: weights plus KV cache, for any context length and number of users, with every term explained.</span></a>
+</main>
+</body>
+</html>

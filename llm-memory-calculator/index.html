@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM Memory Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE work: a teaching tool for trainers, exact and calm
+   IDEA a server's memory as a bank that fills: weights first, then the KV cache, against the catalog's server classes
+   PICTURE one large live memory bar with class markers and the total, beside the controls; the formula below with every term clickable
+   COLOUR white, ink, ultramarine for the KV cache, graphite for weights, carmine when it doesn't fit
+   TYPE Spectral for titles and the big number, Inter for everything else
+   LAYOUT laptop: controls left, result right, formula and explainer below; phone: title, result, controls, formula */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0d0e18);--ink:light-dark(#14110f,#eceef6);--mute:light-dark(#5d616c,#a3a8b8);--line:light-dark(#e2e3ea,#2a2d40);--panel:light-dark(#f4f5fb,#161827);--blue:light-dark(#1d2bd8,#8b95ff);--wt:light-dark(#3a3e49,#b9bdcb);--red:light-dark(#c1121f,#ff6b72);--ok:light-dark(#0f7a4a,#5fd39b);--hi:light-dark(#e6e8ff,#232a6b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.big{font-family:Spectral,Georgia,serif;font-weight:600;letter-spacing:-.02em;line-height:1.05;text-wrap:balance}
+h1{font-size:clamp(32px,4.4vw,48px);margin:0 0 8px}
+h2{font-size:clamp(24px,3vw,32px);margin:0 0 6px}
+p{margin:0 0 10px;max-width:70ch}
+.band{padding:clamp(24px,3.5vw,52px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+.lede{color:var(--mute);font-size:17px}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:28px;margin-top:22px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+label{display:flex;justify-content:space-between;gap:10px;font-weight:600;font-size:15px;margin:14px 0 4px}
+label:first-child{margin-top:0}
+label output{font-weight:700;color:var(--blue);white-space:nowrap;font-variant-numeric:tabular-nums}
+select,input[type=number]{font:16px Inter,sans-serif;width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+input[type=range]{width:100%;height:44px;accent-color:var(--blue);margin:0}
+.hint{font-size:13px;color:var(--mute);margin:0}
+.warn{font-size:14px;color:var(--red);margin:6px 0 0;min-height:1em}
+details{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
+.four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.four label{margin-top:6px}
+.result{position:sticky;top:12px}
+.big{font-size:clamp(56px,8vw,88px);margin:2px 0 0;font-variant-numeric:tabular-nums}
+.verdict{font-size:18px;font-weight:600;margin:6px 0 18px}
+.verdict.no{color:var(--red)}.verdict.yes{color:var(--ok)}
+.bar{position:relative;height:64px;background:light-dark(#fff,#0d0e18);border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex}
+.seg{height:100%;transition:width .35s ease;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden}
+.seg.w{background:var(--wt);color:var(--bg)}.seg.k{background:var(--blue)}
+.ticks{position:relative;height:46px;margin-top:2px}
+.tick{position:absolute;top:0;transform:translateX(-50%);font-size:13px;color:var(--mute);text-align:center;white-space:nowrap}
+.tick::before{content:"";display:block;width:2px;height:12px;margin:0 auto 2px;background:var(--mute)}
+.tick.on{color:var(--ink);font-weight:700}.tick.on::before{background:var(--ink)}
+.mark{position:absolute;top:-70px;width:2px;height:70px;background:var(--ink);opacity:.35;transform:translateX(-50%);pointer-events:none}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:14px;margin-top:4px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(9em,1fr));gap:12px;margin-top:18px}
+.nums div{border-top:2px solid var(--line);padding-top:6px}
+.nums b{display:block;font-size:22px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.nums span{font-size:13px;color:var(--mute)}
+.formula{display:grid;grid-template-columns:minmax(0,7fr) minmax(0,5fr);gap:28px;align-items:start}
+.eq{font-size:18px;line-height:2.4}
+.eq .op{color:var(--mute);margin:0 4px}
+.chip{font:600 16px Inter,sans-serif;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:6px 12px;min-height:40px;cursor:pointer;white-space:nowrap}
+.chip small{display:block;font-weight:500;font-size:12px;color:var(--mute);line-height:1}
+.chip:hover,.chip.sel{background:var(--hi);border-color:var(--blue)}
+.chip:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.eq .res{font-weight:700;white-space:nowrap}
+.explain{position:sticky;top:12px}
+.explain h3{margin:0 0 6px;font-size:20px}
+.explain dl{margin:10px 0 0}
+.explain dt{font-weight:600;font-size:14px;margin-top:10px}
+.explain dd{margin:2px 0 0;color:var(--mute);font-size:15px}
+.scen{display:grid;grid-template-columns:repeat(auto-fit,minmax(14em,1fr));gap:12px;margin-top:14px}
+.scen button{font:inherit;text-align:left;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:14px;cursor:pointer;min-height:44px}
+.scen button b{display:block;font-size:16px}
+.scen button span{font-size:14px;color:var(--mute)}
+.scen button.sel{border-color:var(--blue);background:var(--hi)}
+.story{margin-top:14px;font-size:17px;min-height:3em}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(17em,1fr));gap:12px;margin-top:14px}
+.gloss article{border:1px solid var(--line);border-radius:10px;padding:14px;cursor:pointer;transition:background .2s}
+.gloss article.sel{background:var(--hi);border-color:var(--blue)}
+.gloss h3{margin:0 0 4px;font-size:17px}
+.gloss p{font-size:15px;margin:0 0 6px}
+.gloss .f{font-size:13px;color:var(--mute);margin:0}
+code{font-size:14px;overflow-wrap:anywhere}
+.src li{margin-bottom:6px}
+a{color:var(--blue)}
+@media(max-width:860px){.grid,.formula{grid-template-columns:minmax(0,1fr)}.result{order:-1;position:static}.explain{position:static}}
+@media(prefers-reduced-motion:reduce){.seg{transition:none}}
+</style>
+</head>
+<body>
+<section class="band"><div class="wrap">
+  <h1>How much memory does this model need?</h1>
+  <p class="lede">Move the sliders and watch the server's memory fill: first the model's weights, then the KV cache for every token every user keeps in play. Tap any number in the formula to see what it means.</p>
+  <div class="grid">
+    <div class="panel" id="controls">
+      <label for="model">Model <output id="mmax"></output></label>
+      <select id="model"></select>
+      <label for="ctx">Context per request <output id="ctxo"></output></label>
+      <input type="range" id="ctx" min="0" max="7" step="1" value="3">
+      <label for="users">Concurrent users <output id="userso"></output></label>
+      <input type="range" id="users" min="1" max="64" step="1" value="10">
+      <label for="fill">Context actually used <output id="fillo"></output></label>
+      <input type="range" id="fill" min="10" max="100" step="10" value="100">
+      <p class="hint">100% is the worst case: every request at full length. Real prompts are usually shorter.</p>
+      <p class="warn" id="warn"></p>
+      <details id="adv"><summary>Model numbers (from config.json)</summary>
+        <div class="four">
+          <div><label for="L">Layers</label><input type="number" id="L" min="1" max="200"></div>
+          <div><label for="H">KV heads</label><input type="number" id="H" min="1" max="128"></div>
+          <div><label for="d">Head dim</label><input type="number" id="d" min="16" max="512" step="16"></div>
+          <div><label for="B">Params (B)</label><input type="number" id="B" min="0.1" max="1000" step="0.01"></div>
+        </div>
+        <p class="hint" style="margin-top:8px">Editing a number switches the model to Custom. Choose a preset to reset.</p>
+      </details>
+    </div>
+    <div class="result" aria-live="polite">
+      <div class="hint">Total memory needed</div>
+      <div class="big" id="total">0 GB</div>
+      <div class="verdict" id="verdict"></div>
+      <div class="bar" id="bar" role="img" aria-label="Memory bar"><div class="seg w" id="segw"></div><div class="seg k" id="segk"></div></div>
+      <div class="ticks" id="ticks"></div>
+      <div class="legend"><span><i style="background:var(--wt)"></i>Weights</span><span><i style="background:var(--blue)"></i>KV cache</span><span>Markers: the catalog's memory classes</span></div>
+      <div class="nums" id="nums"></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="band" style="background:var(--panel)"><div class="wrap">
+  <h2>The worked sum</h2>
+  <p class="lede">Every number is a button. Tap one to see what it is, where it comes from and why it matters.</p>
+  <div class="formula">
+    <div class="eq" id="eq"></div>
+    <aside class="panel explain" id="explain" style="background:var(--bg)"></aside>
+  </div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <h2>Try these with the room</h2>
+  <p class="lede">Each one sets the controls and tells the story to say out loud.</p>
+  <div class="scen" id="scen"></div>
+  <p class="story" id="story"></p>
+</div></section>
+
+<section class="band" style="background:var(--panel)"><div class="wrap">
+  <h2>What each term means</h2>
+  <div class="gloss" id="gloss"></div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <h2>Where the numbers come from</h2>
+  <ul class="src">
+    <li>Memory classes, the 2 GB per billion parameters rule and the mixture-of-experts rule: Intel Inference Microservices, <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/models-and-hardware/supported-intel-platforms">Supported Intel platforms</a> (updated 20 Nov 2026).</li>
+    <li>The 92% NUMA reservation: <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/configuration/environment-variables">Environment variables</a>.</li>
+    <li>Layers, KV heads and head dimension: each model's <code>config.json</code> on Hugging Face: <span id="cfglinks"></span>. Parameter counts are rounded, from the model cards.</li>
+    <li>The KV cache figure is calculated with the standard formula on this page, not quoted from Intel. It's an estimate for planning: measure with real prompt lengths before you set limits.</li>
+  </ul>
+</div></section>
+
+<script>
+{
+const CTX=[1024,2048,4096,8192,16384,32768,65536,131072];
+const M=[
+ {n:"Llama 3.2 3B Instruct",L:28,H:8,d:128,B:3.21,max:131072,u:"https://huggingface.co/unsloth/Llama-3.2-3B-Instruct/blob/main/config.json"},
+ {n:"Qwen3-4B",L:36,H:8,d:128,B:4.02,max:40960,u:"https://huggingface.co/Qwen/Qwen3-4B/blob/main/config.json"},
+ {n:"Mistral-7B Instruct v0.3",L:32,H:8,d:128,B:7.25,max:32768,u:"https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/config.json"},
+ {n:"Qwen3-8B",L:36,H:8,d:128,B:8.19,max:40960,u:"https://huggingface.co/Qwen/Qwen3-8B/blob/main/config.json"},
+ {n:"Phi-4-reasoning",L:40,H:10,d:128,B:14.7,max:32768,u:"https://huggingface.co/microsoft/Phi-4-reasoning/blob/main/config.json"},
+ {n:"Qwen3-30B-A3B (mixture-of-experts)",L:48,H:4,d:128,B:30.5,max:40960,moe:3.3,u:"https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/main/config.json"}
+];
+const CLASSES=[32,48,64,96];
+const RES=0.92;
+const T={
+ two:{h:"2 = a key and a value",w:"For every token, each layer stores two vectors: a key (what this token is about) and a value (what it contributes). That pair is the K and V in KV cache.",f:"Always 2.",y:"It doubles the cache. There's no way around it."},
+ L:{h:"Layers",w:"The model is a stack of transformer layers. Each layer keeps its own keys and values for every token.",f:"num_hidden_layers in config.json",y:"More layers, proportionally more cache per token."},
+ H:{h:"KV heads",w:"Attention is split into heads. Modern models share each key/value head across several query heads (grouped-query attention), so they store far fewer KV heads than attention heads.",f:"num_key_value_heads (not num_attention_heads)",y:"The biggest lever on cache size. Llama 3.2 3B has 24 attention heads but stores only 8 KV heads."},
+ d:{h:"Head dimension",w:"The length of each key or value vector, in numbers.",f:"head_dim, or hidden_size ÷ num_attention_heads",y:"Usually 128 in today's models."},
+ b:{h:"2 bytes per number (BF16)",w:"BF16 stores each number in 16 bits, which is 2 bytes. The catalog's containers run in BF16.",f:"torch_dtype: bfloat16",y:"Halving the bytes would halve the cache, but this release supports BF16 only."},
+ kvt:{h:"KV cache per token",w:"How much memory one token of context costs, across all layers.",f:"2 × layers × KV heads × head dim × bytes",y:"Multiply it by every token held in memory to get the whole cache."},
+ ctx:{h:"Context per request",w:"The prompt plus the answer, in tokens. RAG adds retrieved passages; long documents and chat history make it grow. You cap it with vLLM's max-model-len.",f:"Capped by max_position_embeddings; set with INFERENCE_ENGINE_ARGS {\"max-model-len\": …}",y:"Lowering max-model-len is the cheapest way to save memory."},
+ users:{h:"Concurrent users",w:"Requests being answered at the same moment, not total users. Each holds its own context in the cache.",f:"Your peak concurrency",y:"The cache grows in direct proportion."},
+ fill:{h:"Context actually used",w:"Few requests hit the full limit. This slider scales the worst case down to a typical fill.",f:"Measure from real prompts",y:"Plan on the worst case, then check with real traffic."},
+ kv:{h:"KV cache",w:"The model's short-term memory of the conversation: keys and values for every token of every active request, so it doesn't recompute them for each new word.",f:"KV per token × tokens held",y:"It's what usually causes out-of-memory kills, and the part that grows with users and context."},
+ B:{h:"Parameters",w:"The learned numbers inside the model, in billions. A 3B model has about 3 billion.",f:"Model card",y:"Weights take about 2 GB per billion parameters at BF16. A mixture-of-experts model needs all of them in memory, not only the active ones."},
+ w:{h:"Weights",w:"The parameters loaded into memory. Fixed: they don't grow with users or context.",f:"Parameters × 2 bytes",y:"The floor. Everything else sits on top."},
+ total:{h:"Total and server classes",w:"Weights plus KV cache, compared with the catalog's memory classes: 32, 48, 64 and 96 GB. On CPU, vLLM reserves 92% of a NUMA node's memory by default, and the OS needs some too, so leave headroom.",f:"gpu-memory-utilization, default 0.92; check per-node memory with numactl -H",y:"If it doesn't fit, cut context first, then users, then pick a bigger class."}
+};
+const S=[
+ {t:"Lab default",s:"Llama 3.2 3B · 8K · 10 users",m:0,c:3,u:10,f:100,story:"Ten people chatting at 8K context: about 6.4 GB of weights and 9.4 GB of cache. It fits the 32 GB class comfortably. This is the lab server."},
+ {t:"Long documents",s:"Same model · 32K · 10 users",m:0,c:5,u:10,f:100,story:"Same small model, but each request now holds 32K tokens. The cache jumps to about 38 GB, 44 GB in total. On paper that fits 48 GB, but vLLM reserves 92% of memory, about 44 GB usable, so there is no headroom: plan for 64 GB. The model didn't change, the context did."},
+ {t:"Full context",s:"Same model · 128K · 4 users",m:0,c:7,u:4,f:100,story:"Only four users, but at the model's full 128K context the cache passes 60 GB, about 67 GB in total: the 96 GB class. Long context is the expensive dial. Cap it with max-model-len."},
+ {t:"Typical, not worst case",s:"32K limit, half used",m:0,c:5,u:10,f:50,story:"Same 32K limit, but real requests use about half of it. The cache halves too. Measure real prompt lengths before buying memory for the worst case."},
+ {t:"The mixture-of-experts trap",s:"Qwen3-30B-A3B · 8K · 10 users",m:5,c:3,u:10,f:100,story:"Only about 3B parameters are active per token, but all 30.5B must sit in memory: about 61 GB of weights before any cache, 69 GB with it. Size it as a 30B model, not a 3B one."},
+ {t:"Fewer KV heads, smaller cache",s:"Compare per-token cost",m:5,c:5,u:10,f:100,story:"Look at the cost per token: this 30B model stores only 4 KV heads, so each token costs about 96 KB, less than the 3B Llama's 112 KB. Model size and cache size are separate questions."}
+];
+const $=id=>document.getElementById(id);
+const st={m:0,c:3,u:10,f:100,L:28,H:8,d:128,B:3.21,custom:false,term:"kv",sc:-1};
+const fmt=(x,dp=1)=>x.toLocaleString("en-GB",{minimumFractionDigits:dp,maximumFractionDigits:dp});
+const fk=t=>t>=1024?(t/1024)+"K":String(t);
+$("model").innerHTML=M.map((m,i)=>`<option value="${i}">${m.n}</option>`).join("")+`<option value="-1">Custom</option>`;
+$("cfglinks").innerHTML=M.map(m=>`<a href="${m.u}">${m.n}</a>`).join(", ");
+$("scen").innerHTML=S.map((s,i)=>`<button type="button" data-i="${i}"><b>${s.t}</b><span>${s.s}</span></button>`).join("");
+const order=["kv","kvt","two","L","H","d","b","ctx","users","fill","B","w","total"];
+$("gloss").innerHTML=order.map(k=>`<article data-t="${k}" tabindex="0"><h3>${T[k].h}</h3><p>${T[k].w}</p><p class="f">Where: ${T[k].f}</p></article>`).join("");
+function setModel(i){const m=M[i];Object.assign(st,{m:i,L:m.L,H:m.H,d:m.d,B:m.B,custom:false});}
+function calc(){
+ const kvTok=2*st.L*st.H*st.d*2, ctx=CTX[st.c], tokens=ctx*st.u*st.f/100;
+ const kv=tokens*kvTok/1e9, w=st.B*2, tot=kv+w;
+ return{kvTok,ctx,tokens,kv,w,tot};
+}
+function chip(k,val,unit){return `<button type="button" class="chip${st.term===k?" sel":""}" data-t="${k}">${val}<small>${unit}</small></button>`;}
+function render(){
+ const r=calc(), m=st.custom?null:M[st.m];
+ $("model").value=st.custom?"-1":String(st.m);
+ $("ctx").value=st.c;$("users").value=st.u;$("fill").value=st.f;
+ for(const k of ["L","H","d","B"]) if(document.activeElement!==$(k)) $(k).value=st[k];
+ $("ctxo").textContent=fk(r.ctx)+" tokens";$("userso").textContent=st.u;$("fillo").textContent=st.f+"%";
+ $("mmax").textContent=m?"max "+fk(m.max)+(m.moe?" · "+m.moe+"B active":""):"custom";
+ $("warn").textContent=m&&r.ctx>m.max?`${fk(r.ctx)} is beyond this model's maximum context (${fk(m.max)}).`:"";
+ $("total").textContent=fmt(r.tot)+" GB";
+ const cls=CLASSES.find(c=>r.tot<=c*RES);
+ const v=$("verdict");
+ const tight=cls&&(cls*RES-r.tot)<cls*RES*0.1;
+ v.className="verdict "+(cls&&!tight?"yes":"no");
+ v.textContent=!cls?`Above ${fmt(96*RES)} GB usable: beyond the catalog guide's largest class (96 GB)`:tight?`Tight in the ${cls} GB class: ${fmt(cls*RES)} GB usable after vLLM's 92% reservation, almost no headroom`:`Fits the ${cls} GB class (${fmt(cls*RES)} GB usable after vLLM's 92% reservation)`;
+ const axis=Math.max(100,Math.ceil(r.tot*1.1/16)*16);
+ $("segw").style.width=(r.w/axis*100)+"%";$("segk").style.width=(r.kv/axis*100)+"%";
+ const bw=$("bar").clientWidth||600;
+ $("segw").textContent=r.w/axis*bw>72?fmt(r.w)+" GB":"";$("segk").textContent=r.kv/axis*bw>72?fmt(r.kv)+" GB":"";
+ const marks=CLASSES.concat(axis>140?[128]:[]).concat(axis>300?[256]:[]).filter(c=>c<axis);
+ $("ticks").innerHTML=marks.map(c=>`<div class="tick${c===cls?" on":""}" style="left:${c/axis*100}%">${c} GB</div>`).join("");
+ $("nums").innerHTML=[[fmt(r.kvTok,0)+" B","KV cache per token ("+fmt(r.kvTok/1024,0)+" KB)"],[fmt(r.tokens,0),"Tokens held in memory"],[fmt(r.w)+" GB","Weights"],[fmt(r.kv)+" GB","KV cache"]].map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join("");
+ $("eq").innerHTML=
+ `<div>${chip("two","2","key + value")}<span class="op">×</span>${chip("L",st.L,"layers")}<span class="op">×</span>${chip("H",st.H,"KV heads")}<span class="op">×</span>${chip("d",st.d,"head dim")}<span class="op">×</span>${chip("b","2","bytes BF16")}<span class="op">=</span>${chip("kvt",fmt(r.kvTok,0),"bytes per token")}</div>`+
+ `<div>${chip("kvt",fmt(r.kvTok/1024,0)+" KB","per token")}<span class="op">×</span>${chip("ctx",fk(r.ctx),"context")}<span class="op">×</span>${chip("users",st.u,"users")}<span class="op">×</span>${chip("fill",st.f+"%","used")}<span class="op">=</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}</div>`+
+ `<div>${chip("B",fmt(st.B,2)+" B","parameters")}<span class="op">×</span>${chip("b","2","bytes")}<span class="op">=</span>${chip("w",fmt(r.w)+" GB","weights")}<span class="op">+</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}<span class="op">=</span>${chip("total",fmt(r.tot)+" GB","total")}</div>`;
+ const t=T[st.term];
+ $("explain").innerHTML=`<h3>${t.h}</h3><p>${t.w}</p><dl><dt>Where it comes from</dt><dd>${t.f}</dd><dt>Why it matters</dt><dd>${t.y}</dd></dl>`;
+ for(const a of document.querySelectorAll(".gloss article")) a.classList.toggle("sel",a.dataset.t===st.term);
+ for(const b of document.querySelectorAll(".scen button")) b.classList.toggle("sel",+b.dataset.i===st.sc);
+ $("story").textContent=st.sc>=0?S[st.sc].story:"";
+}
+const touch=()=>{st.sc=-1;render();};
+$("model").addEventListener("change",e=>{const i=+e.target.value;if(i>=0)setModel(i);else st.custom=true;touch();});
+$("ctx").addEventListener("input",e=>{st.c=+e.target.value;touch();});
+$("users").addEventListener("input",e=>{st.u=+e.target.value;touch();});
+$("fill").addEventListener("input",e=>{st.f=+e.target.value;touch();});
+for(const k of ["L","H","d","B"]) $(k).addEventListener("input",e=>{const v=parseFloat(e.target.value);if(v>0){st[k]=v;st.custom=true;touch();}});
+document.addEventListener("click",e=>{
+ const c=e.target.closest("[data-t]");
+ if(c){st.term=c.dataset.t;render();if(c.tagName==="ARTICLE")$("eq").scrollIntoView({behavior:"smooth",block:"center"});return;}
+ const s=e.target.closest(".scen button");
+ if(s){const x=S[+s.dataset.i];setModel(x.m);Object.assign(st,{c:x.c,u:x.u,f:x.f,sc:+s.dataset.i,term:x.m===5&&x.t.startsWith("Fewer")?"H":x.m===5?"B":x.c>=5?"ctx":"kv"});render();$("total").scrollIntoView({behavior:"smooth",block:"center"});}
+});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches(".gloss article")){st.term=e.target.dataset.t;render();}});
+setModel(0);render();
+const ro=new ResizeObserver(()=>render());ro.observe($("bar"));
+}
+</script>
+</body>
+</html>
