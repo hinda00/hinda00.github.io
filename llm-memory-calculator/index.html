@@ -37,6 +37,7 @@ input[type=range]{width:100%;height:44px;accent-color:var(--blue);margin:0}
 details{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
 summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.seg.s{background:var(--ok)}
 .four label{margin-top:6px}
 .result{position:sticky;top:12px}
 .big{font-size:clamp(56px,8vw,88px);margin:2px 0 0;font-variant-numeric:tabular-nums}
@@ -97,7 +98,7 @@ a{color:var(--blue)}
       <label for="model">Model <output id="mmax"></output></label>
       <select id="model"></select>
       <label for="ctx">Context per request <output id="ctxo"></output></label>
-      <input type="range" id="ctx" min="0" max="7" step="1" value="3">
+      <input type="range" id="ctx" min="0" max="8" step="1" value="3">
       <label for="users">Concurrent users <output id="userso"></output></label>
       <input type="range" id="users" min="1" max="64" step="1" value="10">
       <label for="fill">Context actually used <output id="fillo"></output></label>
@@ -107,9 +108,11 @@ a{color:var(--blue)}
       <details id="adv"><summary>Model numbers (from config.json)</summary>
         <div class="four">
           <div><label for="L">Layers</label><input type="number" id="L" min="1" max="200"></div>
+          <div><label for="kvL">Attention layers</label><input type="number" id="kvL" min="1" max="200"></div>
           <div><label for="H">KV heads</label><input type="number" id="H" min="1" max="128"></div>
           <div><label for="d">Head dim</label><input type="number" id="d" min="16" max="512" step="16"></div>
           <div><label for="B">Params (B)</label><input type="number" id="B" min="0.1" max="1000" step="0.01"></div>
+          <div><label for="st">State per user (MB)</label><input type="number" id="st" min="0" max="100000" step="1"></div>
         </div>
         <p class="hint" style="margin-top:8px">Editing a number switches the model to Custom. Choose a preset to reset.</p>
       </details>
@@ -118,9 +121,9 @@ a{color:var(--blue)}
       <div class="hint">Total memory needed</div>
       <div class="big" id="total">0 GB</div>
       <div class="verdict" id="verdict"></div>
-      <div class="bar" id="bar" role="img" aria-label="Memory bar"><div class="seg w" id="segw"></div><div class="seg k" id="segk"></div></div>
+      <div class="bar" id="bar" role="img" aria-label="Memory bar"><div class="seg w" id="segw"></div><div class="seg k" id="segk"></div><div class="seg s" id="segs"></div></div>
       <div class="ticks" id="ticks"></div>
-      <div class="legend"><span><i style="background:var(--wt)"></i>Weights</span><span><i style="background:var(--blue)"></i>KV cache</span><span>Markers: the catalog's memory classes</span></div>
+      <div class="legend"><span><i style="background:var(--wt)"></i>Weights</span><span><i style="background:var(--blue)"></i>KV cache</span><span><i style="background:var(--ok)"></i>Fixed state (hybrid models)</span><span>Markers: the catalog's memory classes</span></div>
       <div class="nums" id="nums"></div>
     </div>
   </div>
@@ -152,27 +155,31 @@ a{color:var(--blue)}
   <ul class="src">
     <li>Memory classes, the 2 GB per billion parameters rule and the mixture-of-experts rule: Intel Inference Microservices, <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/models-and-hardware/supported-intel-platforms">Supported Intel platforms</a> (updated 20 Nov 2026).</li>
     <li>The 92% NUMA reservation: <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/configuration/environment-variables">Environment variables</a>.</li>
-    <li>Layers, KV heads and head dimension: each model's <code>config.json</code> on Hugging Face: <span id="cfglinks"></span>. Parameter counts are rounded, from the model cards.</li>
+    <li>Layers, KV heads and head dimension: each model's <code>config.json</code> on Hugging Face: <span id="cfglinks"></span>. Parameter counts are rounded, from the model cards. For Qwen3.5-4B, 5B is the checkpoint's count, which includes its vision encoder; the card says 4B.</li>
+    <li>Qwen3.5-4B's fixed state per user (53 MB) is an estimate from its config: 24 Gated DeltaNet layers × 32 heads × 128 × 128 values plus the convolution state, counted at 4 bytes. At 2 bytes it would be about 26 MB. Check that your serving engine supports this model before relying on it.</li>
     <li>The KV cache figure is calculated with the standard formula on this page, not quoted from Intel. It's an estimate for planning: measure with real prompt lengths before you set limits.</li>
   </ul>
 </div></section>
 
 <script>
 {
-const CTX=[1024,2048,4096,8192,16384,32768,65536,131072];
+const CTX=[1024,2048,4096,8192,16384,32768,65536,131072,262144];
 const M=[
  {n:"Llama 3.2 3B Instruct",L:28,H:8,d:128,B:3.21,max:131072,u:"https://huggingface.co/unsloth/Llama-3.2-3B-Instruct/blob/main/config.json"},
  {n:"Qwen3-4B",L:36,H:8,d:128,B:4.02,max:40960,u:"https://huggingface.co/Qwen/Qwen3-4B/blob/main/config.json"},
  {n:"Mistral-7B Instruct v0.3",L:32,H:8,d:128,B:7.25,max:32768,u:"https://huggingface.co/mistralai/Mistral-7B-Instruct-v0.3/blob/main/config.json"},
  {n:"Qwen3-8B",L:36,H:8,d:128,B:8.19,max:40960,u:"https://huggingface.co/Qwen/Qwen3-8B/blob/main/config.json"},
  {n:"Phi-4-reasoning",L:40,H:10,d:128,B:14.7,max:32768,u:"https://huggingface.co/microsoft/Phi-4-reasoning/blob/main/config.json"},
- {n:"Qwen3-30B-A3B (mixture-of-experts)",L:48,H:4,d:128,B:30.5,max:40960,moe:3.3,u:"https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/main/config.json"}
+ {n:"Qwen3-30B-A3B (mixture-of-experts)",L:48,H:4,d:128,B:30.5,max:40960,moe:3.3,u:"https://huggingface.co/Qwen/Qwen3-30B-A3B/blob/main/config.json"},
+ {n:"Qwen3.5-4B (hybrid attention)",L:32,kvL:8,H:4,d:256,B:5.0,st:53,max:262144,u:"https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/config.json"}
 ];
 const CLASSES=[32,48,64,96];
 const RES=0.92;
 const T={
  two:{h:"2 = a key and a value",w:"For every token, each layer stores two vectors: a key (what this token is about) and a value (what it contributes). That pair is the K and V in KV cache.",f:"Always 2.",y:"It doubles the cache. There's no way around it."},
- L:{h:"Layers",w:"The model is a stack of transformer layers. Each layer keeps its own keys and values for every token.",f:"num_hidden_layers in config.json",y:"More layers, proportionally more cache per token."},
+ L:{h:"Layers",w:"The model is a stack of transformer layers. In a standard model every layer is an attention layer and keeps its own keys and values for every token.",f:"num_hidden_layers in config.json",y:"More attention layers, proportionally more cache per token."},
+ kvL:{h:"Attention layers",w:"The layers that keep a KV cache. In a standard model that's every layer. Hybrid models such as Qwen3.5 mix in linear-attention layers that don't, so only some layers count here.",f:"Count of \"full_attention\" in layer_types (Qwen3.5-4B: 8 of 32)",y:"Fewer attention layers, proportionally less cache. Qwen3.5-4B keeps a quarter of what all 32 layers would."},
+ st:{h:"Fixed state per user",w:"Linear-attention layers (Gated DeltaNet in Qwen3.5) don't remember every token. Each keeps a fixed-size summary per request, so their memory doesn't grow with context.",f:"Estimated from config: heads × key dim × value dim per layer, plus a small convolution state",y:"Small and flat: tens of MB per user, whatever the context length. Zero for standard models."},
  H:{h:"KV heads",w:"Attention is split into heads. Modern models share each key/value head across several query heads (grouped-query attention), so they store far fewer KV heads than attention heads.",f:"num_key_value_heads (not num_attention_heads)",y:"The biggest lever on cache size. Llama 3.2 3B has 24 attention heads but stores only 8 KV heads."},
  d:{h:"Head dimension",w:"The length of each key or value vector, in numbers.",f:"head_dim, or hidden_size ÷ num_attention_heads",y:"Usually 128 in today's models."},
  b:{h:"2 bytes per number (BF16)",w:"BF16 stores each number in 16 bits, which is 2 bytes. The catalog's containers run in BF16.",f:"torch_dtype: bfloat16",y:"Halving the bytes would halve the cache, but this release supports BF16 only."},
@@ -191,29 +198,30 @@ const S=[
  {t:"Full context",s:"Same model · 128K · 4 users",m:0,c:7,u:4,f:100,story:"Only four users, but at the model's full 128K context the cache passes 60 GB, about 67 GB in total: the 96 GB class. Long context is the expensive dial. Cap it with max-model-len."},
  {t:"Typical, not worst case",s:"32K limit, half used",m:0,c:5,u:10,f:50,story:"Same 32K limit, but real requests use about half of it. The cache halves too. Measure real prompt lengths before buying memory for the worst case."},
  {t:"The mixture-of-experts trap",s:"Qwen3-30B-A3B · 8K · 10 users",m:5,c:3,u:10,f:100,story:"Only about 3B parameters are active per token, but all 30.5B must sit in memory: about 61 GB of weights before any cache, 69 GB with it. Size it as a 30B model, not a 3B one."},
+ {t:"Hybrid attention: Qwen3.5-4B",s:"32K · 10 users",m:6,c:5,u:10,f:100,story:"Only 8 of its 32 layers keep a KV cache; the other 24 keep a small fixed state per user. So each token costs 32 KB, and 10 users at 32K total about 21 GB including about 10 GB of weights. A standard model of this size would need 48 to 64 GB. Architecture changes the answer as much as size."},
  {t:"Fewer KV heads, smaller cache",s:"Compare per-token cost",m:5,c:5,u:10,f:100,story:"Look at the cost per token: this 30B model stores only 4 KV heads, so each token costs about 96 KB, less than the 3B Llama's 112 KB. Model size and cache size are separate questions."}
 ];
 const $=id=>document.getElementById(id);
-const st={m:0,c:3,u:10,f:100,L:28,H:8,d:128,B:3.21,custom:false,term:"kv",sc:-1};
+const st={m:0,c:3,u:10,f:100,L:28,kvL:28,H:8,d:128,B:3.21,st:0,custom:false,term:"kv",sc:-1};
 const fmt=(x,dp=1)=>x.toLocaleString("en-GB",{minimumFractionDigits:dp,maximumFractionDigits:dp});
 const fk=t=>t>=1024?(t/1024)+"K":String(t);
 $("model").innerHTML=M.map((m,i)=>`<option value="${i}">${m.n}</option>`).join("")+`<option value="-1">Custom</option>`;
 $("cfglinks").innerHTML=M.map(m=>`<a href="${m.u}">${m.n}</a>`).join(", ");
 $("scen").innerHTML=S.map((s,i)=>`<button type="button" data-i="${i}"><b>${s.t}</b><span>${s.s}</span></button>`).join("");
-const order=["kv","kvt","two","L","H","d","b","ctx","users","fill","B","w","total"];
+const order=["kv","kvt","two","L","kvL","H","d","b","st","ctx","users","fill","B","w","total"];
 $("gloss").innerHTML=order.map(k=>`<article data-t="${k}" tabindex="0"><h3>${T[k].h}</h3><p>${T[k].w}</p><p class="f">Where: ${T[k].f}</p></article>`).join("");
-function setModel(i){const m=M[i];Object.assign(st,{m:i,L:m.L,H:m.H,d:m.d,B:m.B,custom:false});}
+function setModel(i){const m=M[i];Object.assign(st,{m:i,L:m.L,kvL:m.kvL||m.L,H:m.H,d:m.d,B:m.B,st:m.st||0,custom:false});}
 function calc(){
- const kvTok=2*st.L*st.H*st.d*2, ctx=CTX[st.c], tokens=ctx*st.u*st.f/100;
- const kv=tokens*kvTok/1e9, w=st.B*2, tot=kv+w;
- return{kvTok,ctx,tokens,kv,w,tot};
+ const kvTok=2*st.kvL*st.H*st.d*2, ctx=CTX[st.c], tokens=ctx*st.u*st.f/100;
+ const kv=tokens*kvTok/1e9, w=st.B*2, sg=st.u*st.st/1000, tot=kv+w+sg;
+ return{kvTok,ctx,tokens,kv,w,sg,tot};
 }
 function chip(k,val,unit){return `<button type="button" class="chip${st.term===k?" sel":""}" data-t="${k}">${val}<small>${unit}</small></button>`;}
 function render(){
  const r=calc(), m=st.custom?null:M[st.m];
  $("model").value=st.custom?"-1":String(st.m);
  $("ctx").value=st.c;$("users").value=st.u;$("fill").value=st.f;
- for(const k of ["L","H","d","B"]) if(document.activeElement!==$(k)) $(k).value=st[k];
+ for(const k of ["L","kvL","H","d","B","st"]) if(document.activeElement!==$(k)) $(k).value=st[k];
  $("ctxo").textContent=fk(r.ctx)+" tokens";$("userso").textContent=st.u;$("fillo").textContent=st.f+"%";
  $("mmax").textContent=m?"max "+fk(m.max)+(m.moe?" · "+m.moe+"B active":""):"custom";
  $("warn").textContent=m&&r.ctx>m.max?`${fk(r.ctx)} is beyond this model's maximum context (${fk(m.max)}).`:"";
@@ -226,14 +234,15 @@ function render(){
  const axis=Math.max(100,Math.ceil(r.tot*1.1/16)*16);
  $("segw").style.width=(r.w/axis*100)+"%";$("segk").style.width=(r.kv/axis*100)+"%";
  const bw=$("bar").clientWidth||600;
- $("segw").textContent=r.w/axis*bw>72?fmt(r.w)+" GB":"";$("segk").textContent=r.kv/axis*bw>72?fmt(r.kv)+" GB":"";
+ $("segs").style.width=(r.sg/axis*100)+"%";
+ $("segw").textContent=r.w/axis*bw>72?fmt(r.w)+" GB":"";$("segk").textContent=r.kv/axis*bw>72?fmt(r.kv)+" GB":"";$("segs").textContent=r.sg/axis*bw>72?fmt(r.sg)+" GB":"";
  const marks=CLASSES.concat(axis>140?[128]:[]).concat(axis>300?[256]:[]).filter(c=>c<axis);
  $("ticks").innerHTML=marks.map(c=>`<div class="tick${c===cls?" on":""}" style="left:${c/axis*100}%">${c} GB</div>`).join("");
- $("nums").innerHTML=[[fmt(r.kvTok,0)+" B","KV cache per token ("+fmt(r.kvTok/1024,0)+" KB)"],[fmt(r.tokens,0),"Tokens held in memory"],[fmt(r.w)+" GB","Weights"],[fmt(r.kv)+" GB","KV cache"]].map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join("");
+ $("nums").innerHTML=[[fmt(r.kvTok,0)+" B","KV cache per token ("+fmt(r.kvTok/1024,0)+" KB)"],[fmt(r.tokens,0),"Tokens held in memory"],[fmt(r.w)+" GB","Weights"],[fmt(r.kv)+" GB","KV cache"]].concat(st.st>0?[[fmt(r.sg,2)+" GB","Fixed state, all users"]]:[]).map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join("");
  $("eq").innerHTML=
- `<div>${chip("two","2","key + value")}<span class="op">×</span>${chip("L",st.L,"layers")}<span class="op">×</span>${chip("H",st.H,"KV heads")}<span class="op">×</span>${chip("d",st.d,"head dim")}<span class="op">×</span>${chip("b","2","bytes BF16")}<span class="op">=</span>${chip("kvt",fmt(r.kvTok,0),"bytes per token")}</div>`+
+ `<div>${chip("two","2","key + value")}<span class="op">×</span>${chip(st.kvL<st.L?"kvL":"L",st.kvL<st.L?st.kvL+" of "+st.L:st.L,st.kvL<st.L?"attention layers":"layers")}<span class="op">×</span>${chip("H",st.H,"KV heads")}<span class="op">×</span>${chip("d",st.d,"head dim")}<span class="op">×</span>${chip("b","2","bytes BF16")}<span class="op">=</span>${chip("kvt",fmt(r.kvTok,0),"bytes per token")}</div>`+
  `<div>${chip("kvt",fmt(r.kvTok/1024,0)+" KB","per token")}<span class="op">×</span>${chip("ctx",fk(r.ctx),"context")}<span class="op">×</span>${chip("users",st.u,"users")}<span class="op">×</span>${chip("fill",st.f+"%","used")}<span class="op">=</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}</div>`+
- `<div>${chip("B",fmt(st.B,2)+" B","parameters")}<span class="op">×</span>${chip("b","2","bytes")}<span class="op">=</span>${chip("w",fmt(r.w)+" GB","weights")}<span class="op">+</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}<span class="op">=</span>${chip("total",fmt(r.tot)+" GB","total")}</div>`;
+ `<div>${chip("B",fmt(st.B,2)+" B","parameters")}<span class="op">×</span>${chip("b","2","bytes")}<span class="op">=</span>${chip("w",fmt(r.w)+" GB","weights")}<span class="op">+</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}${st.st>0?`<span class="op">+</span>${chip("st",fmt(r.sg,2)+" GB",st.u+" × "+st.st+" MB state")}`:""}<span class="op">=</span>${chip("total",fmt(r.tot)+" GB","total")}</div>`;
  const t=T[st.term];
  $("explain").innerHTML=`<h3>${t.h}</h3><p>${t.w}</p><dl><dt>Where it comes from</dt><dd>${t.f}</dd><dt>Why it matters</dt><dd>${t.y}</dd></dl>`;
  for(const a of document.querySelectorAll(".gloss article")) a.classList.toggle("sel",a.dataset.t===st.term);
@@ -245,12 +254,12 @@ $("model").addEventListener("change",e=>{const i=+e.target.value;if(i>=0)setMode
 $("ctx").addEventListener("input",e=>{st.c=+e.target.value;touch();});
 $("users").addEventListener("input",e=>{st.u=+e.target.value;touch();});
 $("fill").addEventListener("input",e=>{st.f=+e.target.value;touch();});
-for(const k of ["L","H","d","B"]) $(k).addEventListener("input",e=>{const v=parseFloat(e.target.value);if(v>0){st[k]=v;st.custom=true;touch();}});
+for(const k of ["L","kvL","H","d","B","st"]) $(k).addEventListener("input",e=>{const v=parseFloat(e.target.value);if(v>0||(k==="st"&&v===0)){st[k]=v;if(k==="L"&&st.kvL>v)st.kvL=v;st.custom=true;touch();}});
 document.addEventListener("click",e=>{
  const c=e.target.closest("[data-t]");
  if(c){st.term=c.dataset.t;render();if(c.tagName==="ARTICLE")$("eq").scrollIntoView({behavior:"smooth",block:"center"});return;}
  const s=e.target.closest(".scen button");
- if(s){const x=S[+s.dataset.i];setModel(x.m);Object.assign(st,{c:x.c,u:x.u,f:x.f,sc:+s.dataset.i,term:x.m===5&&x.t.startsWith("Fewer")?"H":x.m===5?"B":x.c>=5?"ctx":"kv"});render();$("total").scrollIntoView({behavior:"smooth",block:"center"});}
+ if(s){const x=S[+s.dataset.i];setModel(x.m);Object.assign(st,{c:x.c,u:x.u,f:x.f,sc:+s.dataset.i,term:x.m===6?"kvL":x.m===5&&x.t.startsWith("Fewer")?"H":x.m===5?"B":x.c>=5?"ctx":"kv"});render();$("total").scrollIntoView({behavior:"smooth",block:"center"});}
 });
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches(".gloss article")){st.term=e.target.dataset.t;render();}});
 setModel(0);render();
