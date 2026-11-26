@@ -38,25 +38,6 @@ details{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
 summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center}
 .four{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .seg.s{background:var(--ok)}
-.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);padding:12px max(5vw,16px) 0;position:sticky;top:0;background:var(--bg);z-index:5;overflow-x:auto}
-.tab{font:600 16px Inter,sans-serif;background:none;border:0;border-bottom:3px solid transparent;color:var(--mute);padding:10px 14px;min-height:44px;cursor:pointer;white-space:nowrap}
-.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--blue)}
-.pane[hidden]{display:none}
-.qgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:18px}
-.qcard{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--bg)}
-.qcard.sel{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue) inset}
-.qcard h3{margin:0;font-size:20px}
-.qcard .qbig{font-family:Spectral,Georgia,serif;font-weight:600;font-size:clamp(36px,5vw,52px);line-height:1.05;margin:8px 0 2px;font-variant-numeric:tabular-nums}
-.qcard .bar{height:36px;margin:12px 0 6px}
-.qcard button{font:600 15px Inter,sans-serif;min-height:44px;width:100%;margin-top:12px;border:1px solid var(--blue);background:var(--bg);color:var(--blue);border-radius:8px;cursor:pointer}
-.qcard.sel button{background:var(--blue);color:#fff}
-.tbl{width:100%;border-collapse:collapse;margin-top:14px;font-size:15px}
-.tbl th,.tbl td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-.tbl th{font-weight:600}
-pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;font-size:14px;overflow-x:auto}
-@media(max-width:760px){.qgrid{grid-template-columns:minmax(0,1fr)}}
-.scroll{overflow-x:auto}
-@media(max-width:600px){.stack thead{display:none}.stack tr{display:grid;padding-block:8px;border-bottom:1px solid var(--line)}.stack td{border:0;padding:3px 0;display:flex;gap:12px}.stack td:first-child{padding-bottom:4px}.stack td[data-l]::before{content:attr(data-l);font-weight:600;min-width:4.5em;color:var(--mute)}}
 .four label{margin-top:6px}
 .result{position:sticky;top:12px}
 .big{font-size:clamp(56px,8vw,88px);margin:2px 0 0;font-variant-numeric:tabular-nums}
@@ -109,11 +90,6 @@ a{color:var(--blue)}
 </style>
 </head>
 <body>
-<nav class="tabs" role="tablist" aria-label="Views">
-  <button class="tab" role="tab" id="t-mem" aria-controls="memory" aria-selected="true" data-tab="memory">Memory calculator</button>
-  <button class="tab" role="tab" id="t-q" aria-controls="quantization" aria-selected="false" data-tab="quantization">Quantization</button>
-</nav>
-<div class="pane" id="memory" role="tabpanel" aria-labelledby="t-mem">
 <section class="band"><div class="wrap">
   <h1>How much memory does this model need?</h1>
   <p class="lede">Move the sliders and watch the server's memory fill: first the model's weights, then the KV cache for every token every user keeps in play. Tap any number in the formula to see what it means.</p>
@@ -128,10 +104,6 @@ a{color:var(--blue)}
       <label for="fill">Context actually used <output id="fillo"></output></label>
       <input type="range" id="fill" min="10" max="100" step="10" value="100">
       <p class="hint">100% is the worst case: every request at full length. Real prompts are usually shorter.</p>
-      <div class="four" style="margin-top:6px">
-        <div><label for="wq">Weight precision</label><select id="wq"><option value="bf16">BF16 · 2 bytes</option><option value="int8">INT8 · 1 byte</option><option value="int4">INT4 · ~0.6 byte</option></select></div>
-        <div><label for="kvq">KV cache precision</label><select id="kvq"><option value="bf16">BF16 · 2 bytes</option><option value="8bit">8-bit · 1 byte</option></select></div>
-      </div>
       <p class="warn" id="warn"></p>
       <details id="adv"><summary>Model numbers (from config.json)</summary>
         <div class="four">
@@ -189,52 +161,6 @@ a{color:var(--blue)}
   </ul>
 </div></section>
 
-</div>
-
-<div class="pane" id="quantization" role="tabpanel" aria-labelledby="t-q" hidden>
-<section class="band"><div class="wrap">
-  <h1>Quantization: the same model in fewer bytes</h1>
-  <p class="lede">Quantization stores each weight in fewer bits. The model gets smaller and usually faster, at some cost in answer quality. Here is <b id="qmodel"></b> at <b id="qset"></b>, in three precisions.</p>
-  <div class="qgrid" id="qgrid"></div>
-  <p class="hint" style="margin-top:12px">Quantizing weights doesn't shrink the KV cache: that has its own precision, set to <b id="qkv"></b> on the Memory calculator tab. INT4 is counted at about 0.6 bytes per parameter: 4-bit weights plus their scales, with some layers kept at INT8.</p>
-</div></section>
-
-<section class="band" style="background:var(--panel)"><div class="wrap">
-  <h2>What changes with each precision</h2>
-  <div class="scroll"><table class="tbl stack">
-    <thead><tr><th></th><th>BF16</th><th>INT8</th><th>INT4</th></tr></thead>
-    <tbody>
-      <tr><td><b>Bytes per weight</b></td><td>2</td><td>1</td><td>About 0.6 (4 bits + scales, some INT8 layers)</td></tr>
-      <tr><td><b>Weights memory</b></td><td>Reference</td><td>About half</td><td>About a third</td></tr>
-      <tr><td><b>Speed</b></td><td>Reference</td><td>Usually faster: each new token reads fewer bytes</td><td>Usually faster still; measure, it depends on the engine and CPU</td></tr>
-      <tr><td><b>Answer quality</b></td><td>Reference</td><td>Usually close to BF16</td><td>Most risk: use data-aware methods (AWQ, scale estimation) and test. Small models lose more</td></tr>
-      <tr><td><b>Where it runs on Xeon</b></td><td>Intel Inference Microservices (the catalog's containers)</td><td>OpenVINO, with NNCF weight compression</td><td>OpenVINO, with NNCF weight compression</td></tr>
-    </tbody>
-  </table></div>
-  <p style="margin-top:14px">The catalog's containers support <b>BF16 only</b> today. To serve INT8 or INT4 on Xeon, compress the model with OpenVINO and serve it with OpenVINO Model Server.</p>
-</div></section>
-
-<section class="band"><div class="wrap">
-  <h2>How to make an INT4 or INT8 model</h2>
-  <p>OpenVINO compresses a Hugging Face model in one command. INT4 here is mixed precision: mostly 4-bit, with some layers kept at 8-bit to protect quality.</p>
-  <pre><code># INT8 weights
-optimum-cli export openvino --model microsoft/Phi-3.5-mini-instruct \
-  --weight-format int8 ov_phi-3.5-mini-instruct
-
-# INT4 weights, data-aware for better quality
-optimum-cli export openvino --model microsoft/Phi-3.5-mini-instruct \
-  --weight-format int4 --awq --scale-estimation --dataset wikitext2 \
-  --group-size 64 --ratio 1.0 ov_phi-3.5-mini-instruct</code></pre>
-  <p class="hint">Commands from OpenVINO's <a href="https://docs.openvino.ai/weight_compression">LLM Weight Compression</a> guide. Compare answers on the customer's own prompts before and after.</p>
-  <h2 style="margin-top:28px">Sources</h2>
-  <ul class="src">
-    <li>Catalog containers are BF16 only: Intel Inference Microservices, <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/reference/supported-features">Supported Features</a>.</li>
-    <li>INT8 and INT4 weight compression, mixed INT4/INT8, and the note that models under 1B parameters lose more accuracy: <a href="https://docs.openvino.ai/weight_compression">OpenVINO LLM Weight Compression</a>.</li>
-    <li>The 0.6 bytes per parameter for INT4 is a planning estimate, not an Intel figure. OpenVINO's own example takes Llama 2 7B to about 4 GB with 4-bit compression.</li>
-  </ul>
-</div></section>
-</div>
-
 <footer class="band" style="border-top:1px solid var(--line);padding-block:20px"><div class="wrap" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:15px;color:var(--mute)"><span>Made by <b style="color:var(--ink)">Hind Azegrouz</b></span><a href="https://hinda00.github.io/">hinda00.github.io</a></div></footer>
 
 <script>
@@ -258,15 +184,14 @@ const T={
  st:{h:"Fixed state per user",w:"Linear-attention layers (Gated DeltaNet in Qwen3.5) don't remember every token. Each keeps a fixed-size summary per request, so their memory doesn't grow with context.",f:"Estimated from config: heads × key dim × value dim per layer, plus a small convolution state",y:"Small and flat: tens of MB per user, whatever the context length. Zero for standard models."},
  H:{h:"KV heads",w:"Attention is split into heads. Modern models share each key/value head across several query heads (grouped-query attention), so they store far fewer KV heads than attention heads.",f:"num_key_value_heads (not num_attention_heads)",y:"The biggest lever on cache size. Llama 3.2 3B has 24 attention heads but stores only 8 KV heads."},
  d:{h:"Head dimension",w:"The length of each key or value vector, in numbers.",f:"head_dim, or hidden_size ÷ num_attention_heads",y:"Usually 128 in today's models."},
- b:{h:"Bytes per number in the KV cache",w:"Each key and value number is stored in BF16 (2 bytes) by default. Some engines can keep the cache in 8 bits (1 byte).",f:"KV cache precision control; engine-dependent",y:"8-bit halves the cache. The catalog's containers keep it in BF16."},
- wq:{h:"Weight precision (quantization)",w:"How many bytes each parameter takes in memory: BF16 = 2, INT8 = 1, INT4 ≈ 0.6 including scales and layers kept at INT8.",f:"Weight precision control; see the Quantization tab",y:"Halving the bytes halves the weights and usually speeds up generation. The catalog's containers run BF16 only; INT8 and INT4 run on OpenVINO."},
+ b:{h:"2 bytes per number (BF16)",w:"BF16 stores each number in 16 bits, which is 2 bytes. The catalog's containers run in BF16.",f:"torch_dtype: bfloat16",y:"Halving the bytes would halve the cache, but this release supports BF16 only."},
  kvt:{h:"KV cache per token",w:"How much memory one token of context costs, across all layers.",f:"2 × layers × KV heads × head dim × bytes",y:"Multiply it by every token held in memory to get the whole cache."},
  ctx:{h:"Context per request",w:"The prompt plus the answer, in tokens. RAG adds retrieved passages; long documents and chat history make it grow. You cap it with vLLM's max-model-len.",f:"Capped by max_position_embeddings; set with INFERENCE_ENGINE_ARGS {\"max-model-len\": …}",y:"Lowering max-model-len is the cheapest way to save memory."},
  users:{h:"Concurrent users",w:"Requests being answered at the same moment, not total users. Each holds its own context in the cache.",f:"Your peak concurrency",y:"The cache grows in direct proportion."},
  fill:{h:"Context actually used",w:"Few requests hit the full limit. This slider scales the worst case down to a typical fill.",f:"Measure from real prompts",y:"Plan on the worst case, then check with real traffic."},
  kv:{h:"KV cache",w:"The model's short-term memory of the conversation: keys and values for every token of every active request, so it doesn't recompute them for each new word.",f:"KV per token × tokens held",y:"It's what usually causes out-of-memory kills, and the part that grows with users and context."},
  B:{h:"Parameters",w:"The learned numbers inside the model, in billions. A 3B model has about 3 billion.",f:"Model card",y:"Weights take about 2 GB per billion parameters at BF16. A mixture-of-experts model needs all of them in memory, not only the active ones."},
- w:{h:"Weights",w:"The parameters loaded into memory. Fixed: they don't grow with users or context.",f:"Parameters × bytes per weight (2 for BF16)",y:"The floor. Everything else sits on top."},
+ w:{h:"Weights",w:"The parameters loaded into memory. Fixed: they don't grow with users or context.",f:"Parameters × 2 bytes",y:"The floor. Everything else sits on top."},
  total:{h:"Total and server classes",w:"Weights plus KV cache, compared with the catalog's memory classes: 32, 48, 64 and 96 GB. On CPU, vLLM reserves 92% of a NUMA node's memory by default, and the OS needs some too, so leave headroom.",f:"gpu-memory-utilization, default 0.92; check per-node memory with numactl -H",y:"If it doesn't fit, cut context first, then users, then pick a bigger class."}
 };
 const S=[
@@ -276,51 +201,38 @@ const S=[
  {t:"Typical, not worst case",s:"32K limit, half used",m:0,c:5,u:10,f:50,story:"Same 32K limit, but real requests use about half of it. The cache halves too. Measure real prompt lengths before buying memory for the worst case."},
  {t:"The mixture-of-experts trap",s:"Qwen3-30B-A3B · 8K · 10 users",m:5,c:3,u:10,f:100,story:"Only about 3B parameters are active per token, but all 30.5B must sit in memory: about 61 GB of weights before any cache, 69 GB with it. Size it as a 30B model, not a 3B one."},
  {t:"Hybrid attention: Qwen3.5-4B",s:"32K · 10 users",m:6,c:5,u:10,f:100,story:"Only 8 of its 32 layers keep a KV cache; the other 24 keep a small fixed state per user. So each token costs 32 KB, and 10 users at 32K total about 21 GB including about 10 GB of weights. A standard model of this size would need 48 to 64 GB. Architecture changes the answer as much as size."},
- {t:"Quantize the 30B model",s:"Qwen3-30B-A3B · INT4 · 8K · 10 users",m:5,c:3,u:10,f:100,wq:"int4",story:"Same mixture-of-experts model, weights in INT4: about 18 GB instead of 61, so 10 users at 8K now fit the 32 GB class. The catch: the catalog's containers run BF16 only, so this runs on OpenVINO, and answer quality must be checked on real prompts."},
  {t:"Fewer KV heads, smaller cache",s:"Compare per-token cost",m:5,c:5,u:10,f:100,story:"Look at the cost per token: this 30B model stores only 4 KV heads, so each token costs about 96 KB, less than the 3B Llama's 112 KB. Model size and cache size are separate questions."}
 ];
 const $=id=>document.getElementById(id);
-const st={m:0,c:3,u:10,f:100,L:28,kvL:28,H:8,d:128,B:3.21,st:0,wq:"bf16",kvq:"bf16",custom:false,term:"kv",sc:-1};
-const WB={bf16:2,int8:1,int4:0.6}, KB={bf16:2,"8bit":1}, WN={bf16:"BF16",int8:"INT8",int4:"INT4"}, KN={bf16:"BF16","8bit":"8-bit"};
+const st={m:0,c:3,u:10,f:100,L:28,kvL:28,H:8,d:128,B:3.21,st:0,custom:false,term:"kv",sc:-1};
 const fmt=(x,dp=1)=>x.toLocaleString("en-GB",{minimumFractionDigits:dp,maximumFractionDigits:dp});
 const fk=t=>t>=1024?(t/1024)+"K":String(t);
 $("model").innerHTML=M.map((m,i)=>`<option value="${i}">${m.n}</option>`).join("")+`<option value="-1">Custom</option>`;
 $("cfglinks").innerHTML=M.map(m=>`<a href="${m.u}">${m.n}</a>`).join(", ");
 $("scen").innerHTML=S.map((s,i)=>`<button type="button" data-i="${i}"><b>${s.t}</b><span>${s.s}</span></button>`).join("");
-const order=["kv","kvt","two","L","kvL","H","d","b","st","ctx","users","fill","B","wq","w","total"];
+const order=["kv","kvt","two","L","kvL","H","d","b","st","ctx","users","fill","B","w","total"];
 $("gloss").innerHTML=order.map(k=>`<article data-t="${k}" tabindex="0"><h3>${T[k].h}</h3><p>${T[k].w}</p><p class="f">Where: ${T[k].f}</p></article>`).join("");
 function setModel(i){const m=M[i];Object.assign(st,{m:i,L:m.L,kvL:m.kvL||m.L,H:m.H,d:m.d,B:m.B,st:m.st||0,custom:false});}
-function calc(wq){
- const kvTok=2*st.kvL*st.H*st.d*KB[st.kvq], ctx=CTX[st.c], tokens=ctx*st.u*st.f/100;
- const kv=tokens*kvTok/1e9, w=st.B*WB[wq||st.wq], sg=st.u*st.st/1000, tot=kv+w+sg;
+function calc(){
+ const kvTok=2*st.kvL*st.H*st.d*2, ctx=CTX[st.c], tokens=ctx*st.u*st.f/100;
+ const kv=tokens*kvTok/1e9, w=st.B*2, sg=st.u*st.st/1000, tot=kv+w+sg;
  return{kvTok,ctx,tokens,kv,w,sg,tot};
 }
 function chip(k,val,unit){return `<button type="button" class="chip${st.term===k?" sel":""}" data-t="${k}">${val}<small>${unit}</small></button>`;}
-function verdictOf(tot){
- const cls=CLASSES.find(c=>tot<=c*RES), tight=cls&&(cls*RES-tot)<cls*RES*0.1;
- return{cls,tight,txt:!cls?`Above ${fmt(96*RES)} GB usable: beyond the catalog guide's largest class (96 GB)`:tight?`Tight in the ${cls} GB class: ${fmt(cls*RES)} GB usable after vLLM's 92% reservation, almost no headroom`:`Fits the ${cls} GB class (${fmt(cls*RES)} GB usable after vLLM's 92% reservation)`};
-}
-function renderQ(){
- const m=st.custom?null:M[st.m], ctx=CTX[st.c];
- $("qmodel").textContent=m?m.n:"your custom model";
- $("qset").textContent=fk(ctx)+" context × "+st.u+" users"+(st.f<100?" ("+st.f+"% used)":"");
- $("qkv").textContent=KN[st.kvq];
- const rs=["bf16","int8","int4"].map(q=>[q,calc(q)]), mx=Math.max(...rs.map(([,r])=>r.tot))*1.05;
- $("qgrid").innerHTML=rs.map(([q,r])=>{const v=verdictOf(r.tot);return `<div class="qcard${q===st.wq?" sel":""}"><h3>${WN[q]}</h3><div class="qbig">${fmt(r.tot)} GB</div><div class="hint">${fmt(r.w)} GB weights · ${fmt(r.kv+r.sg)} GB KV cache${r.sg?" and state":""}</div><div class="bar"><div class="seg w" style="width:${r.w/mx*100}%"></div><div class="seg k" style="width:${(r.kv+r.sg)/mx*100}%"></div></div><div class="verdict ${v.cls&&!v.tight?"yes":"no"}" style="font-size:15px;margin:0">${v.cls?(v.tight?"Tight in "+v.cls+" GB":"Fits "+v.cls+" GB"):"Above 96 GB"}</div><button type="button" data-q="${q}">${q===st.wq?"In use":"Use "+WN[q]}</button></div>`;}).join("");
-}
 function render(){
  const r=calc(), m=st.custom?null:M[st.m];
- $("wq").value=st.wq;$("kvq").value=st.kvq;
  $("model").value=st.custom?"-1":String(st.m);
  $("ctx").value=st.c;$("users").value=st.u;$("fill").value=st.f;
  for(const k of ["L","kvL","H","d","B","st"]) if(document.activeElement!==$(k)) $(k).value=st[k];
  $("ctxo").textContent=fk(r.ctx)+" tokens";$("userso").textContent=st.u;$("fillo").textContent=st.f+"%";
  $("mmax").textContent=m?"max "+fk(m.max)+(m.moe?" · "+m.moe+"B active":""):"custom";
- $("warn").textContent=(m&&r.ctx>m.max?`${fk(r.ctx)} is beyond this model's maximum context (${fk(m.max)}). `:"")+(st.wq!=="bf16"||st.kvq!=="bf16"?"The catalog's containers run BF16 only; INT8, INT4 and 8-bit KV figures are for other engines, such as OpenVINO.":"");
+ $("warn").textContent=m&&r.ctx>m.max?`${fk(r.ctx)} is beyond this model's maximum context (${fk(m.max)}).`:"";
  $("total").textContent=fmt(r.tot)+" GB";
- const vd=verdictOf(r.tot), cls=vd.cls, v=$("verdict");
- v.className="verdict "+(cls&&!vd.tight?"yes":"no");
- v.textContent=vd.txt;
+ const cls=CLASSES.find(c=>r.tot<=c*RES);
+ const v=$("verdict");
+ const tight=cls&&(cls*RES-r.tot)<cls*RES*0.1;
+ v.className="verdict "+(cls&&!tight?"yes":"no");
+ v.textContent=!cls?`Above ${fmt(96*RES)} GB usable: beyond the catalog guide's largest class (96 GB)`:tight?`Tight in the ${cls} GB class: ${fmt(cls*RES)} GB usable after vLLM's 92% reservation, almost no headroom`:`Fits the ${cls} GB class (${fmt(cls*RES)} GB usable after vLLM's 92% reservation)`;
  const axis=Math.max(100,Math.ceil(r.tot*1.1/16)*16);
  $("segw").style.width=(r.w/axis*100)+"%";$("segk").style.width=(r.kv/axis*100)+"%";
  const bw=$("bar").clientWidth||600;
@@ -330,22 +242,16 @@ function render(){
  $("ticks").innerHTML=marks.map(c=>`<div class="tick${c===cls?" on":""}" style="left:${c/axis*100}%">${c} GB</div>`).join("");
  $("nums").innerHTML=[[fmt(r.kvTok,0)+" B","KV cache per token ("+fmt(r.kvTok/1024,0)+" KB)"],[fmt(r.tokens,0),"Tokens held in memory"],[fmt(r.w)+" GB","Weights"],[fmt(r.kv)+" GB","KV cache"]].concat(st.st>0?[[fmt(r.sg,2)+" GB","Fixed state, all users"]]:[]).map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join("");
  $("eq").innerHTML=
- `<div>${chip("two","2","key + value")}<span class="op">×</span>${chip(st.kvL<st.L?"kvL":"L",st.kvL<st.L?st.kvL+" of "+st.L:st.L,st.kvL<st.L?"attention layers":"layers")}<span class="op">×</span>${chip("H",st.H,"KV heads")}<span class="op">×</span>${chip("d",st.d,"head dim")}<span class="op">×</span>${chip("b",KB[st.kvq],"bytes "+KN[st.kvq])}<span class="op">=</span>${chip("kvt",fmt(r.kvTok,0),"bytes per token")}</div>`+
+ `<div>${chip("two","2","key + value")}<span class="op">×</span>${chip(st.kvL<st.L?"kvL":"L",st.kvL<st.L?st.kvL+" of "+st.L:st.L,st.kvL<st.L?"attention layers":"layers")}<span class="op">×</span>${chip("H",st.H,"KV heads")}<span class="op">×</span>${chip("d",st.d,"head dim")}<span class="op">×</span>${chip("b","2","bytes BF16")}<span class="op">=</span>${chip("kvt",fmt(r.kvTok,0),"bytes per token")}</div>`+
  `<div>${chip("kvt",fmt(r.kvTok/1024,0)+" KB","per token")}<span class="op">×</span>${chip("ctx",fk(r.ctx),"context")}<span class="op">×</span>${chip("users",st.u,"users")}<span class="op">×</span>${chip("fill",st.f+"%","used")}<span class="op">=</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}</div>`+
- `<div>${chip("B",fmt(st.B,2)+" B","parameters")}<span class="op">×</span>${chip("wq",WB[st.wq],"bytes "+WN[st.wq])}<span class="op">=</span>${chip("w",fmt(r.w)+" GB","weights")}<span class="op">+</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}${st.st>0?`<span class="op">+</span>${chip("st",fmt(r.sg,2)+" GB",st.u+" × "+st.st+" MB state")}`:""}<span class="op">=</span>${chip("total",fmt(r.tot)+" GB","total")}</div>`;
+ `<div>${chip("B",fmt(st.B,2)+" B","parameters")}<span class="op">×</span>${chip("b","2","bytes")}<span class="op">=</span>${chip("w",fmt(r.w)+" GB","weights")}<span class="op">+</span>${chip("kv",fmt(r.kv)+" GB","KV cache")}${st.st>0?`<span class="op">+</span>${chip("st",fmt(r.sg,2)+" GB",st.u+" × "+st.st+" MB state")}`:""}<span class="op">=</span>${chip("total",fmt(r.tot)+" GB","total")}</div>`;
  const t=T[st.term];
  $("explain").innerHTML=`<h3>${t.h}</h3><p>${t.w}</p><dl><dt>Where it comes from</dt><dd>${t.f}</dd><dt>Why it matters</dt><dd>${t.y}</dd></dl>`;
  for(const a of document.querySelectorAll(".gloss article")) a.classList.toggle("sel",a.dataset.t===st.term);
  for(const b of document.querySelectorAll(".scen button")) b.classList.toggle("sel",+b.dataset.i===st.sc);
  $("story").textContent=st.sc>=0?S[st.sc].story:"";
- renderQ();
 }
 const touch=()=>{st.sc=-1;render();};
-$("wq").addEventListener("change",e=>{st.wq=e.target.value;touch();});
-$("kvq").addEventListener("change",e=>{st.kvq=e.target.value;touch();});
-function showTab(id){for(const b of document.querySelectorAll(".tab")){const on=b.dataset.tab===id;b.setAttribute("aria-selected",on);$(b.dataset.tab).hidden=!on;}render();}
-for(const b of document.querySelectorAll(".tab")) b.addEventListener("click",()=>{try{history.replaceState(null,"","#"+b.dataset.tab);}catch(_){}showTab(b.dataset.tab);});
-window.addEventListener("hashchange",()=>showTab(location.hash==="#quantization"?"quantization":"memory"));
 $("model").addEventListener("change",e=>{const i=+e.target.value;if(i>=0)setModel(i);else st.custom=true;touch();});
 $("ctx").addEventListener("input",e=>{st.c=+e.target.value;touch();});
 $("users").addEventListener("input",e=>{st.u=+e.target.value;touch();});
@@ -354,14 +260,11 @@ for(const k of ["L","kvL","H","d","B","st"]) $(k).addEventListener("input",e=>{c
 document.addEventListener("click",e=>{
  const c=e.target.closest("[data-t]");
  if(c){st.term=c.dataset.t;render();if(c.tagName==="ARTICLE")$("eq").scrollIntoView({behavior:"smooth",block:"center"});return;}
- const q=e.target.closest("[data-q]");
- if(q){st.wq=q.dataset.q;st.sc=-1;render();return;}
  const s=e.target.closest(".scen button");
- if(s){const x=S[+s.dataset.i];setModel(x.m);Object.assign(st,{wq:x.wq||"bf16",kvq:"bf16",c:x.c,u:x.u,f:x.f,sc:+s.dataset.i,term:x.wq?"wq":x.m===6?"kvL":x.m===5&&x.t.startsWith("Fewer")?"H":x.m===5?"B":x.c>=5?"ctx":"kv"});render();$("total").scrollIntoView({behavior:"smooth",block:"center"});}
+ if(s){const x=S[+s.dataset.i];setModel(x.m);Object.assign(st,{c:x.c,u:x.u,f:x.f,sc:+s.dataset.i,term:x.m===6?"kvL":x.m===5&&x.t.startsWith("Fewer")?"H":x.m===5?"B":x.c>=5?"ctx":"kv"});render();$("total").scrollIntoView({behavior:"smooth",block:"center"});}
 });
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches(".gloss article")){st.term=e.target.dataset.t;render();}});
-for(const t of document.querySelectorAll(".stack")){const h=[...t.rows[0].cells].map(c=>c.textContent);for(const r of [...t.rows].slice(1))[...r.cells].forEach((c,i)=>{if(i&&h[i])c.dataset.l=h[i];});}
-setModel(0);showTab(location.hash==="#quantization"?"quantization":"memory");
+setModel(0);render();
 const ro=new ResizeObserver(()=>render());ro.observe($("bar"));
 }
 </script>
