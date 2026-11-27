@@ -79,6 +79,17 @@ input[type=range]{width:100%;height:40px;accent-color:var(--blue);margin:0}
 .scen button.sel{border-color:var(--blue);background:var(--hi)}
 .story{margin-top:14px;font-size:17px;min-height:3em}
 .src li{margin-bottom:6px}
+.ark{display:inline-flex;align-items:center;min-height:36px;font-size:14px;font-weight:600;margin-top:4px}
+.skus{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
+.skus h3{grid-column:1/-1;margin:10px 0 0;font-size:16px}
+.sku{position:relative;display:block;text-decoration:none;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);min-height:44px}
+.sku b{display:block;font-size:16px;color:var(--blue)}
+.sku span{font-size:13px;color:var(--mute)}
+.sku.sel{border-color:var(--blue);background:var(--hi)}
+.sku .tip{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:240px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.45;padding:8px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:5}
+.sku .tip::after{content:"";position:absolute;top:100%;left:50%;margin-left:-6px;border:6px solid transparent;border-top-color:var(--ink)}
+.sku:hover .tip,.sku:focus-visible .tip{opacity:1}
+.sku:hover{border-color:var(--blue)}
 button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 @media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}.result{order:-1}}
 @media(prefers-reduced-motion:reduce){.seg{transition:none}}
@@ -103,6 +114,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
       <div class="sep">SERVER</div>
       <label for="cpu">Processor <output id="cpuo"></output></label>
       <select id="cpu"></select>
+      <a class="ark" id="ark" target="_blank" rel="noopener"></a>
       <label for="sock">Sockets</label>
       <select id="sock"><option value="1">1 socket</option><option value="2" selected>2 sockets</option></select>
       <label for="nps">NUMA nodes per socket</label>
@@ -161,6 +173,12 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
 </div></section>
 
 <section class="band" style="background:var(--panel)"><div class="wrap">
+  <h2>Check every SKU at the source</h2>
+  <p class="lede">Hover a processor for the numbers this page uses; click it to open Intel's own page and double-check.</p>
+  <div class="skus" id="skus"></div>
+</div></section>
+
+<section class="band"><div class="wrap">
   <h2>Where the numbers come from</h2>
   <ul class="src">
     <li>Cores, TDP, DDR5 and MRDIMM speeds for every SKU: Supermicro CPU tables for <a href="https://www.supermicro.com/en/support/resources/cpu-intel-xeon-6900">Xeon 6900 series</a> and <a href="https://www.supermicro.com/en/support/resources/cpu-intel-xeon-6700-6500">Xeon 6700/6500 series</a>; confirm a SKU on <a href="https://www.intel.com/content/www/us/en/products/sku/241643.html">Intel ARK</a>. Channels per socket: 12 on Xeon 6900P, 8 on Xeon 6700P and 6500P. Only P-core SKUs are listed, because AMX, the matrix engine vLLM uses for BF16, is on P-cores.</li>
@@ -197,6 +215,10 @@ const CPU=[
  ["6787P","6700P",86,350,8000],["6788P","6700P",86,350,0],["6781P","6700P",80,350,8000,1],["6776P","6700P",64,350,8000],["6774P","6700P",64,350,8000,1],["6767P","6700P",64,350,8000],["6768P","6700P",64,330,0],["6761P","6700P",64,350,8000,1],["6760P","6700P",64,330,0],["6747P","6700P",48,330,8000],["6748P","6700P",48,300,0],["6741P","6700P",48,300,0,1],["6740P","6700P",48,270,0],["6736P","6700P",36,205,0],["6745P","6700P",32,300,0],["6738P","6700P",32,270,0],["6737P","6700P",32,270,0],["6732P","6700P",32,350,0],["6731P","6700P",32,245,0,1],["6730P","6700P",32,250,0],
  ["6530P","6500P",32,225,0],["6527P","6500P",24,255,0],["6521P","6500P",24,225,0,1],["6520P","6500P",24,210,0],["6517P","6500P",16,190,0],["6515P","6500P",16,150,0],["6511P","6500P",16,150,0,1]
 ].map(([n,f,c,w,mr,one])=>({n,f,c,w,mr,one:!!one,ch:F[f].ch}));
+/* Intel ARK product IDs confirmed for these; the rest use ARK's own search, which opens the SKU's page */
+const ARKID={"6952P":"241643","6972P":"240785","6960P":"240775","6962P":"244339","6787P":"241844"};
+const ark=n=>ARKID[n]?`https://www.intel.com/content/www/us/en/products/sku/${ARKID[n]}.html`:`https://ark.intel.com/content/www/us/en/ark/search.html?_charset_=UTF-8&q=${encodeURIComponent("Xeon "+n)}`;
+const memtxt=c=>c.mr?`DDR5-6400 or MRDIMM-${c.mr}`:"DDR5-6400 only";
 const CLASSES=[32,48,64,96],RES=0.92,DDR=6400;
 const S=[
  {t:"The 1 TB question",s:"Llama-class 8B · 6787P · 64 GB DIMMs",m:3,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:64,me:"ddr",story:"Sixteen 64 GB DIMMs make 1 TB, as in Lenovo's MLPerf server. Look at layer 2: the instance uses a sliver, the rest is pale blue, reserved by vLLM but never used. The terabyte came from filling every channel with a common DIMM size, not from the model."},
@@ -216,6 +238,7 @@ if(q.has("m")){const m=+q.get("m");if(m>=0&&m<M.length)st.m=m;else if(m===-1){co
 for(const[k,lo,hi] of[["c",0,8],["u",1,256],["f",10,100]])if(q.has(k)){const v=+q.get(k);if(v>=lo&&v<=hi)st[k]=v;}
 $("model").innerHTML=M.map((m,i)=>`<option value="${i}">${m.n}</option>`).join("")+(st.custom?`<option value="-1">${st.custom.n}</option>`:"");
 $("cpu").innerHTML=Object.keys(F).map(f=>`<optgroup label="${F[f].label}">`+CPU.filter(c=>c.f===f).map(c=>`<option value="${c.n}">Xeon ${c.n} · ${c.c} cores${c.one?" · 1S":""}</option>`).join("")+`</optgroup>`).join("");
+$("skus").innerHTML=Object.keys(F).map(f=>`<h3>${F[f].label}</h3>`+CPU.filter(c=>c.f===f).map(c=>`<a class="sku" data-n="${c.n}" href="${ark(c.n)}" target="_blank" rel="noopener" aria-label="Xeon ${c.n} on Intel ARK, opens in a new tab"><b>Xeon ${c.n} ↗</b><span>${c.c} cores · ${c.w} W</span><span class="tip" role="tooltip">${c.c} cores · ${c.w} W TDP<br>${c.ch} memory channels per socket<br>${memtxt(c)}<br>${c.one?"1-socket SKU":"Modelled here in a 2-socket server"}<br>Opens Intel ARK to confirm</span></a>`).join("")).join("");
 $("scen").innerHTML=S.map((s,i)=>`<button type="button" data-i="${i}"><b>${s.t}</b><span>${s.s}</span></button>`).join("");
 const model=()=>st.m===-1?st.custom:M[st.m];
 function calc(){
@@ -240,6 +263,8 @@ function render(){
  $("ctxo").textContent=fk(r.ctx)+" tokens";$("userso").textContent=st.u;$("fillo").textContent=st.f+"%";
  $("mmax").textContent="max "+fk(m.max)+(m.moe?" · "+m.moe+"B active":"");
  $("cpuo").textContent=c.c+" cores · "+c.w+" W";
+ $("ark").href=ark(c.n);$("ark").textContent=`Check Xeon ${c.n} on Intel ARK ↗`;
+ for(const a of document.querySelectorAll(".sku"))a.classList.toggle("sel",a.dataset.n===c.n);
  $("tab1").href=p1link();$("srcp1").href=p1link();
  $("hostbig").textContent=`${r.dimms} × ${st.dm} GB = ${r.host>=1024?fmt(r.host/1024,r.host%1024?1:0)+" TB":r.host+" GB"}`;
  const v=$("verdict");
