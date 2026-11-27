@@ -72,24 +72,38 @@ input[type=range]{width:100%;height:40px;accent-color:var(--blue);margin:0}
 .steps article{border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--bg)}
 .steps article p{font-size:15px;color:var(--mute);margin:0}
 .steps article code{font-size:13px}
-.scen{display:grid;grid-template-columns:repeat(auto-fit,minmax(14em,1fr));gap:12px;margin-top:14px}
-.scen button{font:inherit;text-align:left;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:14px;cursor:pointer;min-height:44px}
-.scen button b{display:block;font-size:16px}
-.scen button span{font-size:14px;color:var(--mute)}
-.scen button.sel{border-color:var(--blue);background:var(--hi)}
-.story{margin-top:14px;font-size:17px;min-height:3em}
 .src li{margin-bottom:6px}
 .ark{display:inline-flex;align-items:center;min-height:36px;font-size:14px;font-weight:600;margin-top:4px}
-.skus{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
-.skus h3{grid-column:1/-1;margin:10px 0 0;font-size:16px}
-.sku{position:relative;display:block;text-decoration:none;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg);min-height:44px}
-.sku b{display:block;font-size:16px;color:var(--blue)}
-.sku span{font-size:13px;color:var(--mute)}
-.sku.sel{border-color:var(--blue);background:var(--hi)}
-.sku .tip{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:max-content;max-width:240px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.45;padding:8px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:opacity .15s;z-index:5}
-.sku .tip::after{content:"";position:absolute;top:100%;left:50%;margin-left:-6px;border:6px solid transparent;border-top-color:var(--ink)}
-.sku:hover .tip,.sku:focus-visible .tip{opacity:1}
-.sku:hover{border-color:var(--blue)}
+.f69{--fc:light-dark(#1d2bd8,#7480f0)}.f67{--fc:light-dark(#b85f00,#c47f1c)}.f65{--fc:light-dark(#b0247a,#e06aaa)}
+.chartbox{position:relative;margin-top:16px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 12px 6px}
+.chartbox svg{display:block;width:100%;overflow:visible}
+.chartbox .grid line{stroke:var(--line)}
+.chartbox .ax{font:12px Inter,sans-serif;fill:var(--mute)}
+.chartbox .axt{font:600 13px Inter,sans-serif;fill:var(--ink)}
+.chartbox .lbl{font:600 13px Inter,sans-serif;fill:var(--ink)}
+.chartbox .cnt{font:700 11px Inter,sans-serif;fill:var(--ink)}
+.pt{cursor:pointer}.pt circle.m{fill:var(--fc);stroke:var(--bg);stroke-width:2}
+.pt.cur circle.m{stroke:var(--ink);stroke-width:3}
+.pt:hover circle.m,.pt:focus-visible circle.m{stroke:var(--ink);stroke-width:2.5}
+.pt:focus-visible{outline:none}
+.ctip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.45;padding:8px 10px;border-radius:8px;max-width:260px;opacity:0;transition:opacity .12s;z-index:5}
+.ctip b{color:var(--bg)}
+.clegend{display:flex;flex-wrap:wrap;gap:16px;font-size:13px;color:var(--mute);margin:8px 4px 4px}
+.clegend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px;background:var(--fc)}
+.tblwrap{overflow-x:auto;margin-top:18px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+table.sk{border-collapse:collapse;width:100%;min-width:860px;font-size:14px;font-variant-numeric:tabular-nums}
+table.sk th,table.sk td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table.sk th{font-size:12px;color:var(--mute);font-weight:600;position:sticky;top:0;background:var(--panel)}
+table.sk th:first-child,table.sk td:first-child,table.sk th:nth-child(2),table.sk td:nth-child(2){text-align:left}
+table.sk tr.fam td{background:var(--panel);font-weight:700;text-align:left;color:var(--ink)}
+table.sk td a{font-weight:700;text-decoration:none}table.sk td a:hover{text-decoration:underline}
+table.sk tr.cur td{background:var(--hi)}
+table.sk tr.flash td{animation:flash 1.6s ease}
+@keyframes flash{0%,40%{background:light-dark(#fff1c2,#4a3a10)}}
+table.sk .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--fc);margin-right:6px}
+table.sk button{font:600 13px Inter,sans-serif;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:4px 12px;min-height:32px;cursor:pointer}
+table.sk button:hover{border-color:var(--blue)}
+@media(prefers-reduced-motion:reduce){table.sk tr.flash td{animation:none}}
 button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 @media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}.result{order:-1}}
 @media(prefers-reduced-motion:reduce){.seg{transition:none}}
@@ -160,26 +174,23 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
   <p class="lede">Three different questions, each answered by a different knob. Mixing them up is where the confusion comes from.</p>
   <div class="steps">
     <article><h3>1 · Instance need</h3><p>Weights plus KV cache plus fixed state, from page 1. Only the model, context, users and fill change it. Divide by 0.92 and round up to a catalog class: 32, 48, 64 or 96 GB.</p></article>
-    <article><h3>2 · NUMA node budget</h3><p>Run one vLLM instance per NUMA node, users split between them. vLLM reserves 92% of its node's memory at startup (<code>gpu-memory-utilization</code>), whatever the instance needs; the OS keeps the rest. The instance must fit inside that 92%.</p></article>
+    <article><h3>2 · NUMA node budget</h3><p>Run one vLLM instance per NUMA node, users split between them. vLLM reserves 92% of its node's memory at startup, whatever the instance needs; the OS keeps the rest. The instance must fit inside that 92%.</p></article>
     <article><h3>3 · Host DIMMs</h3><p>Every memory channel gets one DIMM, because decode speed is set by memory bandwidth. The DIMM count is fixed by the processor (sockets × channels); the DIMM size only buys capacity. MRDIMM raises bandwidth, which raises tokens per second.</p></article>
     <article><h3>Why bandwidth sets speed</h3><p>Each new token reads all the weights from memory once. So one user can't go faster than bandwidth ÷ weight size. Real speed lands below this ceiling, but it moves with it.</p></article>
   </div>
 </div></section>
 
+
 <section class="band"><div class="wrap">
-  <h2>Try these with the room</h2>
-  <p class="lede">Each one sets the controls and tells the story to say out loud.</p>
-  <div class="scen" id="scen"></div>
-  <p class="story" id="story"></p>
+  <h2>Every Xeon 6 P-core SKU, side by side</h2>
+  <p class="lede" id="chartlede">Each dot is a processor: cores across, the ceiling for one user up. It follows the model, memory type and NUMA setting above. Hover a dot for its numbers; click it to jump to its row in the table.</p>
+  <div class="chartbox"><svg id="chart" role="img" aria-label="Scatter of every Xeon 6 P-core SKU: cores against the single-user decode ceiling"></svg><div class="ctip" id="ctip" role="tooltip"></div>
+  <div class="clegend"><span class="f69"><i></i>Xeon 6900P · 12 channels</span><span class="f67"><i></i>Xeon 6700P · 8 channels</span><span class="f65"><i></i>Xeon 6500P · 8 channels</span><span>× n = processors with identical numbers (dots side by side share the same values)</span></div></div>
+  <div class="tblwrap"><table class="sk" id="sktable"><thead><tr><th>Processor (Intel ARK ↗)</th><th>Family</th><th>Cores</th><th>TDP</th><th>Channels</th><th>Memory</th><th>Sockets</th><th>Peak GB/s per socket</th><th>Ceiling, 1 user</th><th></th></tr></thead><tbody id="skbody"></tbody></table></div>
+  <p class="hint" style="margin-top:8px">Every processor value comes from its Intel ARK page; click a name to check it. Peak bandwidth and the ceiling are calculated from those values.</p>
 </div></section>
 
 <section class="band" style="background:var(--panel)"><div class="wrap">
-  <h2>Check every SKU at the source</h2>
-  <p class="lede">Hover a processor for the numbers this page uses; click it to open its specifications page on Intel ARK and double-check.</p>
-  <div class="skus" id="skus"></div>
-</div></section>
-
-<section class="band"><div class="wrap">
   <h2>Where the numbers come from</h2>
   <ul class="src">
     <li>Every processor figure (cores, TDP, memory types and speeds, memory channels per socket, and how many sockets it supports) comes from that SKU's specifications page on <a href="https://www.intel.com/content/www/us/en/ark/products/series/240357/intel-xeon-6-processors.html">Intel ARK</a>, checked on 27 November 2026. Each card above links to its page. Only P-core SKUs are listed, because AMX, the matrix engine vLLM uses for BF16, is on P-cores.</li>
@@ -224,26 +235,16 @@ const ARK={"6980P": "240777/intel-xeon-6980p-processor-504m-cache-2-00-ghz", "69
 const ark=n=>`https://www.intel.com/content/www/us/en/products/sku/${ARK[n]}/specifications.html`;
 const memtxt=c=>c.mr?`DDR5-6400 or MRDIMM-${c.mr}`:"DDR5-6400 only";
 const CLASSES=[32,48,64,96],RES=0.92,DDR=6400;
-const S=[
- {t:"The 1 TB question",s:"Llama-class 8B · 6787P · 64 GB DIMMs",m:3,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:64,me:"ddr",story:"Sixteen 64 GB DIMMs make 1 TB, as in Lenovo's MLPerf server. Look at layer 2: the instance uses a sliver, the rest is pale blue, reserved by vLLM but never used. The terabyte came from filling every channel with a common DIMM size, not from the model."},
- {t:"Same speed, half the memory",s:"Same server · 32 GB DIMMs",m:3,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:32,me:"ddr",story:"Swap to 32 GB DIMMs: still sixteen of them, so the bandwidth and the decode ceiling don't move. Each node still has plenty of room. Capacity was never the constraint for an 8B model."},
- {t:"Twelve channels",s:"Same workload · 6952P",m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"ddr",story:"Xeon 6900P has 12 channels per socket instead of 8: 24 DIMMs, and 50% more bandwidth per socket. The decode ceiling rises with it. More channels, not more gigabytes, is what makes each user faster."},
- {t:"MRDIMM",s:"6952P · MRDIMM-8800",m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"mr",story:"MRDIMM runs at 8800 MT/s instead of 6400. Same capacity, about 38% more bandwidth, so the ceiling per user jumps too. This is the memory upgrade that buys tokens per second."},
- {t:"Sub-NUMA and chat",s:"6952P · SNC3",m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:3,dm:32,me:"ddr",story:"Split each socket into 3 NUMA nodes and you run 6 instances. Each needs less memory, but each reads from only 4 channels, so the ceiling per user drops to a third. For interactive chat, one node per socket is usually the better choice. Measure both."},
- {t:"When capacity matters",s:"Qwen3-30B-A3B · 6787P · 16 GB DIMMs",m:5,c:5,u:64,f:100,cpu:"6787P",so:2,np:1,dm:16,me:"ddr",story:"A 30B mixture-of-experts model at 32K context for 64 users: 61 GB of weights plus a large cache per instance. With 16 GB DIMMs each node has only 128 GB, so it doesn't fit. Step up to 32 GB DIMMs and it fits the node, but it is still above the catalog's 96 GB class. This is the case where gigabytes, not channels, are the limit."}
-];
 const $=id=>document.getElementById(id);
 const fmt=(x,dp=1)=>x.toLocaleString("en-GB",{minimumFractionDigits:dp,maximumFractionDigits:dp});
 const fk=t=>t>=1024?(t/1024)+"K":String(t);
-const st={m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"ddr",sc:-1,custom:null};
+const st={m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"ddr",custom:null};
 /* read the workload from page 1's link, if any */
 const q=new URLSearchParams(location.search);
 if(q.has("m")){const m=+q.get("m");if(m>=0&&m<M.length)st.m=m;else if(m===-1){const c={n:"Custom (from page 1)"};for(const k of["L","kvL","H","d","B","st"])c[k]=parseFloat(q.get(k))||0;if(c.L&&c.H&&c.d&&c.B){c.kvL=c.kvL||c.L;c.max=262144;st.custom=c;st.m=-1;}}}
 for(const[k,lo,hi] of[["c",0,8],["u",1,256],["f",10,100]])if(q.has(k)){const v=+q.get(k);if(v>=lo&&v<=hi)st[k]=v;}
 $("model").innerHTML=M.map((m,i)=>`<option value="${i}">${m.n}</option>`).join("")+(st.custom?`<option value="-1">${st.custom.n}</option>`:"");
 $("cpu").innerHTML=Object.keys(F).map(f=>`<optgroup label="${F[f].label}">`+CPU.filter(c=>c.f===f).map(c=>`<option value="${c.n}">Xeon ${c.n} · ${c.c} cores${c.sc!=="2S"?" · "+c.sc.replace("_","/"):""}</option>`).join("")+`</optgroup>`).join("");
-$("skus").innerHTML=Object.keys(F).map(f=>`<h3>${F[f].label}</h3>`+CPU.filter(c=>c.f===f).map(c=>`<a class="sku" data-n="${c.n}" href="${ark(c.n)}" target="_blank" rel="noopener" aria-label="Xeon ${c.n} on Intel ARK, opens in a new tab"><b>Xeon ${c.n} ↗</b><span>${c.c} cores · ${c.w} W</span><span class="tip" role="tooltip">${c.c} cores · ${c.w} W TDP<br>${c.ch} memory channels per socket<br>${memtxt(c)}<br>Scalability: ${scTxt[c.sc]}<br>All values from Intel ARK</span></a>`).join("")).join("");
-$("scen").innerHTML=S.map((s,i)=>`<button type="button" data-i="${i}"><b>${s.t}</b><span>${s.s}</span></button>`).join("");
 const model=()=>st.m===-1?st.custom:M[st.m];
 function calc(){
  const m=model(),c=CPU.find(x=>x.n===st.cpu);
@@ -255,6 +256,45 @@ function calc(){
  const chn=c.ch/st.np,bwS=c.ch*8*mt/1000,bwN=chn*8*mt/1000,ceil=bwN/w;
  return{m,c,so,nodes,inst,up,kvTok,ctx,w,kv,sg,need,hr,cls,mr,mt,dimms,host,node,res,chn,bwS,bwN,ceil,fits:hr<=node};
 }
+const FC={"6900P":"f69","6700P":"f67","6500P":"f65"};
+function skuNums(c,r){const mr=st.me==="mr"&&c.mr>0,mt=mr?c.mr:DDR,bwS=c.ch*8*mt/1000,bwN=bwS/st.np;return{mr,mt,bwS,bwN,ceil:bwN/r.w};}
+function drawTable(r){
+ let h="";
+ for(const f of Object.keys(F)){
+  h+=`<tr class="fam"><td colspan="10">${F[f].label}</td></tr>`;
+  for(const c of CPU.filter(x=>x.f===f)){const k=skuNums(c,r);
+   h+=`<tr id="row-${c.n}" class="${FC[c.f]}${c.n===st.cpu?" cur":""}"><td><span class="dot"></span><a href="${ark(c.n)}" target="_blank" rel="noopener" title="Open Xeon ${c.n} on Intel ARK">Xeon ${c.n} ↗</a></td><td>${c.f}</td><td>${c.c}</td><td>${c.w} W</td><td>${c.ch}</td><td>${c.mr?"DDR5-6400 · MRDIMM-"+c.mr:"DDR5-6400"}</td><td>${c.sc.replace("_","/")}</td><td>${fmt(k.bwS,0)}${k.mr?" (MRDIMM)":""}</td><td>${fmt(k.ceil,0)} tok/s</td><td><button type="button" data-use="${c.n}">Use</button></td></tr>`;}
+ }
+ $("skbody").innerHTML=h;
+}
+function drawChart(r){
+ const svg=$("chart"),W=Math.max(300,svg.parentElement.clientWidth-24),H=W<560?300:360,pl=48,pr=96,pt=18,pb=46;
+ const pts=CPU.map(c=>({c,k:skuNums(c,r)}));
+ const ymax=Math.max(...pts.map(p=>p.k.ceil))*1.18,xmax=140;
+ const X=v=>pl+v/xmax*(W-pl-pr),Y=v=>H-pb-v/ymax*(H-pt-pb);
+ const step=ymax>80?20:ymax>40?10:5;
+ let g=`<g class="grid">`;for(let v=0;v<=ymax;v+=step)g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${pl-8}" y="${Y(v)+4}" text-anchor="end">${v}</text>`;
+ for(let v=0;v<=xmax;v+=20)g+=`<text class="ax" x="${X(v)}" y="${H-pb+18}" text-anchor="middle">${v}</text>`;
+ g+=`</g><text class="axt" x="${(pl+W-pr)/2}" y="${H-6}" text-anchor="middle">Cores per processor</text><text class="axt" x="${pl-40}" y="${pt-4}">Ceiling for one user, tok/s</text>`;
+ /* group processors with identical family, cores and ceiling into one dot */
+ const groups=new Map();
+ for(const p of pts){const key=p.c.f+"|"+p.c.c+"|"+p.k.ceil.toFixed(2);if(!groups.has(key))groups.set(key,{f:p.c.f,x:p.c.c,y:p.k.ceil,list:[]});groups.get(key).list.push(p);}
+ /* nudge groups from different families that would sit on the same spot */
+ const spot=new Map();
+ for(const gr of groups.values()){const k=gr.x+"|"+gr.y.toFixed(2);const n=spot.get(k)||0;gr.dx=n*11;spot.set(k,n+1);}
+ let d="",last={};
+ for(const gr of groups.values()){const cx=X(gr.x)+gr.dx,cy=Y(gr.y),cur=gr.list.some(p=>p.c.n===st.cpu);
+  d+=`<g class="pt ${FC[gr.f]}${cur?" cur":""}" tabindex="0" role="button" data-names="${gr.list.map(p=>p.c.n).join(",")}" aria-label="${gr.list.map(p=>"Xeon "+p.c.n).join(", ")}: ${gr.x} cores, ${fmt(gr.y,0)} tokens per second"><circle cx="${cx}" cy="${cy}" r="14" fill="transparent"/><circle class="m" cx="${cx}" cy="${cy}" r="6.5"/>${gr.list.length>1&&W>=560?`<text class="cnt" x="${cx+9}" y="${cy-7}">×${gr.list.length}</text>`:""}</g>`;
+  const lead=gr.f==="6500P"?(!last[gr.f]||gr.x<last[gr.f].x):(!last[gr.f]||gr.x>last[gr.f].x);if(lead)last[gr.f]={x:gr.x,cx,y:cy};}
+ for(const f of Object.keys(last))d+=`<text class="lbl" x="${f==="6500P"?last[f].cx-8:last[f].cx+14}" y="${last[f].y+(f==="6500P"?24:4)}" text-anchor="start">${f}</text>`;
+ svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("height",H);svg.innerHTML=g+d;
+ const m=model();$("chartlede").textContent=`Each dot is a processor: cores across, the ceiling for one user up, for ${m.n} with ${st.me==="mr"?"MRDIMM where the processor supports it, DDR5 otherwise":"DDR5-6400"} and ${st.np} NUMA node${st.np>1?"s":""} per socket. Hover a dot for its numbers; click it to jump to its row in the table.`;
+}
+function drawAll(r){drawChart(r);drawTable(r);}
+function tipFor(el){const r=calc();return el.dataset.names.split(",").map(n=>{const c=CPU.find(x=>x.n===n),k=skuNums(c,r);return `<b>Xeon ${n}</b> · ${c.c} cores · ${c.w} W<br>${c.ch} channels · ${k.mr?"MRDIMM-"+k.mt:"DDR5-6400"} · ${c.sc.replace("_","/")}<br>${fmt(k.bwN,0)} GB/s per node → ${fmt(k.ceil,0)} tok/s`;}).join("<hr style='border:0;border-top:1px solid currentColor;opacity:.3;margin:6px 0'>")+"<br><span style='opacity:.75'>Click to see it in the table</span>";}
+function showTip(el){const t=$("ctip"),box=$("chart").parentElement.getBoundingClientRect(),b=el.querySelector("circle.m").getBoundingClientRect();t.innerHTML=tipFor(el);t.style.opacity=1;let x=b.left-box.left+14,y=b.top-box.top-10;t.style.left="0px";t.style.top="0px";const tw=t.offsetWidth,th=t.offsetHeight;if(x+tw>box.width-8)x=b.left-box.left-tw-8;if(y-th<0)y=b.bottom-box.top+th+8;t.style.left=Math.max(4,x)+"px";t.style.top=(y-th)+"px";}
+function hideTip(){$("ctip").style.opacity=0;}
+function goRow(names){const n=names.split(",");const rows=n.map(x=>$("row-"+x)).filter(Boolean);if(!rows.length)return;rows[0].scrollIntoView({behavior:"smooth",block:"center"});for(const tr of rows){tr.classList.remove("flash");void tr.offsetWidth;tr.classList.add("flash");}}
 function pct(x,a){return Math.max(0,x/a*100)+"%";}
 function lab(el,v,a,px){el.textContent=v/a*px>64?fmt(v)+" GB":"";}
 function render(){
@@ -268,7 +308,6 @@ function render(){
  $("mmax").textContent="max "+fk(m.max)+(m.moe?" · "+m.moe+"B active":"");
  $("cpuo").textContent=c.c+" cores · "+c.w+" W";
  $("ark").href=ark(c.n);$("ark").textContent=`Check Xeon ${c.n} on Intel ARK ↗`;
- for(const a of document.querySelectorAll(".sku"))a.classList.toggle("sel",a.dataset.n===c.n);
  $("tab1").href=p1link();$("srcp1").href=p1link();
  $("hostbig").textContent=`${r.dimms} × ${st.dm} GB = ${r.host>=1024?fmt(r.host/1024,r.host%1024?1:0)+" TB":r.host+" GB"}`;
  const v=$("verdict");
@@ -311,8 +350,7 @@ function render(){
   [fmt(r.ceil,0)+" tok/s","Ceiling for one user"],
   [fmt(r.kvTok/1024,0)+" KB","KV cache per token"]
  ].map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join("");
- for(const b of document.querySelectorAll(".scen button"))b.classList.toggle("sel",+b.dataset.i===st.sc);
- $("story").textContent=st.sc>=0?S[st.sc].story:"";
+ drawAll(r);
  const p=new URLSearchParams({m:st.m,c:st.c,u:st.u,f:st.f,cpu:st.cpu,so:r.so,np:st.np,dm:st.dm,me:st.me});
  if(st.custom)for(const k of["L","kvL","H","d","B","st"])p.set(k,st.custom[k]);
  history.replaceState(null,"","?"+p);
@@ -324,7 +362,7 @@ if(["1","2","4","8"].includes(q.get("so")))st.so=+q.get("so");
 if(["1","2","3"].includes(q.get("np")))st.np=+q.get("np");
 if(["16","32","64","96","128"].includes(q.get("dm")))st.dm=+q.get("dm");
 if(["ddr","mr"].includes(q.get("me")))st.me=q.get("me");
-const touch=()=>{st.sc=-1;render();};
+const touch=()=>render();
 $("model").addEventListener("change",e=>{st.m=+e.target.value;touch();});
 $("ctx").addEventListener("input",e=>{st.c=+e.target.value;touch();});
 $("users").addEventListener("input",e=>{st.u=+e.target.value;touch();});
@@ -335,7 +373,14 @@ $("cpu").addEventListener("change",()=>{const c=CPU.find(x=>x.n===st.cpu);st.so=
 $("nps").addEventListener("change",e=>{st.np=+e.target.value;touch();});
 $("dimm").addEventListener("change",e=>{st.dm=+e.target.value;touch();});
 $("mem").addEventListener("change",e=>{st.me=e.target.value;touch();});
-$("scen").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const x=S[+b.dataset.i];Object.assign(st,{m:x.m,c:x.c,u:x.u,f:x.f,cpu:x.cpu,so:x.so,np:x.np,dm:x.dm,me:x.me,sc:+b.dataset.i});render();$("hostbig").scrollIntoView({behavior:"smooth",block:"center"});});
+const ch=$("chart");
+ch.addEventListener("mouseover",e=>{const p=e.target.closest(".pt");if(p)showTip(p);});
+ch.addEventListener("mouseout",e=>{const p=e.target.closest(".pt");if(p&&!p.contains(e.relatedTarget))hideTip();});
+ch.addEventListener("focusin",e=>{const p=e.target.closest(".pt");if(p)showTip(p);});
+ch.addEventListener("focusout",hideTip);
+ch.addEventListener("click",e=>{const p=e.target.closest(".pt");if(p){hideTip();goRow(p.dataset.names);}});
+ch.addEventListener("keydown",e=>{const p=e.target.closest(".pt");if(p&&(e.key==="Enter"||e.key===" ")){e.preventDefault();hideTip();goRow(p.dataset.names);}});
+$("skbody").addEventListener("click",e=>{const b=e.target.closest("button[data-use]");if(!b)return;st.cpu=b.dataset.use;const c=CPU.find(x=>x.n===st.cpu);st.so=c.sk.includes(2)?2:c.sk[0];render();$("hostbig").scrollIntoView({behavior:"smooth",block:"center"});});
 render();
 new ResizeObserver(()=>render()).observe($("bar1"));
 }
