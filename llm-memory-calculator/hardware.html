@@ -104,6 +104,21 @@ table.sk .dot{display:inline-block;width:10px;height:10px;border-radius:50%;back
 table.sk button{font:600 13px Inter,sans-serif;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:4px 12px;min-height:32px;cursor:pointer}
 table.sk button:hover{border-color:var(--blue)}
 @media(prefers-reduced-motion:reduce){table.sk tr.flash td{animation:none}}
+.back{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:20px;margin-top:16px;align-items:start}
+.bnums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+.bnums div{border-top:2px solid var(--line);padding-top:6px}
+.bnums span{display:block;font-size:13px;color:var(--mute)}
+.bnums em{font-style:normal}
+.bnums b{display:block;font-family:Spectral,Georgia,serif;font-size:clamp(34px,4vw,46px);line-height:1.1;font-variant-numeric:tabular-nums}
+.bnums small{display:block;font-size:13px;color:var(--mute)}
+.bverdict{font-weight:600;margin:14px 0 0}
+#bchart .curve{fill:none;stroke:var(--blue);stroke-width:2.5}
+#bchart .tl{stroke:light-dark(#c77700,#f2b45a);stroke-width:1.5;stroke-dasharray:5 4}
+#bchart .ml{stroke:var(--red);stroke-width:1.5;stroke-dasharray:5 4}
+#bchart .sl{stroke:var(--ok);stroke-width:1.5}
+#bchart .hov{stroke:var(--ink);stroke-width:1;opacity:.35}
+#bchart .tag{font:600 12px Inter,sans-serif}
+@media(max-width:860px){.back{grid-template-columns:minmax(0,1fr)}}
 button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 @media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}.result{order:-1}}
 @media(prefers-reduced-motion:reduce){.seg{transition:none}}
@@ -170,6 +185,25 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
 </div></section>
 
 <section class="band" style="background:var(--panel)"><div class="wrap">
+  <h2>Work backwards: how many users fit?</h2>
+  <p class="lede">Start from the server above and ask the question the other way round. Memory gives one answer, bandwidth gives another, and the smaller one is the real limit.</p>
+  <div class="back">
+    <div class="panel" style="background:var(--bg)">
+      <label for="tgt">Minimum speed each user should see <output id="tgto"></output></label>
+      <input type="range" id="tgt" min="2" max="40" step="1" value="10">
+      <p class="hint">About 10 tokens per second streams a little faster than most people read.</p>
+      <div class="bnums">
+        <div><span>Users the memory can hold</span><b id="umem"></b><small id="umems"></small></div>
+        <div><span>Users who each get <em id="tgte"></em></span><b id="uspd"></b><small id="uspds"></small></div>
+      </div>
+      <p class="bverdict" id="bverdict"></p>
+    </div>
+    <div class="chartbox" style="margin-top:0"><svg id="bchart" role="img" aria-label="Speed each user can see against the number of concurrent users"></svg><div class="ctip" id="btip"></div></div>
+  </div>
+  <div class="steps" id="bsteps"></div>
+</div></section>
+
+<section class="band"><div class="wrap">
   <h2>How the pieces connect</h2>
   <p class="lede">Three different questions, each answered by a different knob. Mixing them up is where the confusion comes from.</p>
   <div class="steps">
@@ -181,7 +215,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
 </div></section>
 
 
-<section class="band"><div class="wrap">
+<section class="band" style="background:var(--panel)"><div class="wrap">
   <h2>Every Xeon 6 P-core SKU, side by side</h2>
   <p class="lede" id="chartlede">Each dot is a processor: cores across, the ceiling for one user up. It follows the model, memory type and NUMA setting above. Hover a dot for its numbers; click it to jump to its row in the table.</p>
   <div class="chartbox"><svg id="chart" role="img" aria-label="Scatter of every Xeon 6 P-core SKU: cores against the single-user decode ceiling"></svg><div class="ctip" id="ctip" role="tooltip"></div>
@@ -190,7 +224,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
   <p class="hint" style="margin-top:8px">Every processor value comes from its Intel ARK page; click a name to check it. Peak bandwidth and the ceiling are calculated from those values.</p>
 </div></section>
 
-<section class="band" style="background:var(--panel)"><div class="wrap">
+<section class="band"><div class="wrap">
   <h2>Where the numbers come from</h2>
   <ul class="src">
     <li>Every processor figure (cores, TDP, memory types and speeds, memory channels per socket, and how many sockets it supports) comes from that SKU's specifications page on <a href="https://www.intel.com/content/www/us/en/ark/products/series/240357/intel-xeon-6-processors.html">Intel ARK</a>, checked on 27 November 2026. Each card above links to its page. Only P-core SKUs are listed, because AMX, the matrix engine vLLM uses for BF16, is on P-cores.</li>
@@ -215,7 +249,8 @@ const M=[
  {n:"Qwen3-8B",L:36,H:8,d:128,B:8.19,max:40960},
  {n:"Phi-4-reasoning",L:40,H:10,d:128,B:14.7,max:32768},
  {n:"Qwen3-30B-A3B (mixture-of-experts)",L:48,H:4,d:128,B:30.5,max:40960,moe:3.3},
- {n:"Qwen3.5-4B (hybrid attention)",L:32,kvL:8,H:4,d:256,B:5.0,st:53,max:262144}
+ {n:"Qwen3.5-4B (hybrid attention)",L:32,kvL:8,H:4,d:256,B:5.0,st:53,max:262144},
+ {n:"Llama 3.1 8B Instruct",L:32,H:8,d:128,B:8.03,max:131072}
 ];
 /* Every SKU field below was read from that SKU's Intel ARK specifications page on 27 Nov 2026:
    Total Cores, TDP, Memory Types (DDR5 / MRDIMM speed), Max # of Memory Channels, Scalability (1S, 2S, 4S_8S). */
@@ -291,7 +326,51 @@ function drawChart(r){
  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("height",H);svg.innerHTML=g+d;
  const m=model();$("chartlede").textContent=`Each dot is a processor: cores across, the ceiling for one user up, for ${m.n} with ${st.me==="mr"?"MRDIMM where the processor supports it, DDR5 otherwise":"DDR5-6400"} and ${st.np} NUMA node${st.np>1?"s":""} per socket. Hover a dot for its numbers; click it to jump to its row in the table.`;
 }
-function drawAll(r){drawChart(r);drawTable(r);}
+function backCalc(r){
+ const kvU=CTX[st.c]*st.f/100*r.kvTok/1e9+(r.m.st||0)/1000;  /* GB per user */
+ const room=r.node*RES-r.w;                                     /* KV room per node */
+ const memN=Math.max(0,Math.floor(room/kvU)),mem=memN*r.nodes;
+ const T=+$("tgt").value,spdN=Math.max(0,Math.floor((r.bwN/T-r.w)/kvU)),spd=spdN*r.nodes;
+ const per=U=>r.bwN/(r.w+(U/r.nodes)*kvU);                     /* tok/s each user sees with U users in total */
+ return{kvU,room,memN,mem,T,spdN,spd,per};
+}
+function drawBack(r){
+ const b=backCalc(r),T=b.T,m=r.m;
+ $("tgto").textContent=T+" tok/s";$("tgte").textContent="≥ "+T+" tok/s";
+ $("umem").textContent=b.mem.toLocaleString("en-GB");$("umems").textContent=`${b.memN.toLocaleString("en-GB")} per node × ${r.nodes} node${r.nodes>1?"s":""}`;
+ $("uspd").textContent=b.spd.toLocaleString("en-GB");$("uspds").textContent=b.spd?`${b.spdN} per node × ${r.nodes}`:`even one user can't reach ${T} tok/s`;
+ const v=$("bverdict"),lim=Math.min(b.mem,b.spd);
+ if(b.spd===0){v.style.color="var(--red)";v.textContent=`This server can't give even one user ${T} tokens per second with ${m.n}. More channels or MRDIMM, or a smaller model.`;}
+ else if(b.spd<=b.mem){const used=(r.w+b.spdN*b.kvU)/(r.node*RES)*100;v.style.color="var(--ink)";v.textContent=`Bandwidth is the limit: about ${b.spd.toLocaleString("en-GB")} users. At that load each instance uses ${fmt(used,0)}% of what vLLM reserves; the memory could hold ${fmt(b.mem/Math.max(1,b.spd),0)}× more users than the bandwidth can serve.`;}
+ else{v.style.color="var(--ink)";v.textContent=`Memory is the limit: about ${b.mem.toLocaleString("en-GB")} users. Bigger DIMMs, shorter context or fewer users per instance would raise it.`;}
+ /* chart: speed each user sees vs total users */
+ const svg=$("bchart"),W=Math.max(280,svg.parentElement.clientWidth-24),H=W<520?260:300,pl=44,pr=16,pt=20,pb=44;
+ const umax=Math.max(8,Math.ceil(Math.max(b.mem*1.06,b.spd*1.6,r.nodes*4)));
+ const y0=b.per(0),ymax=Math.max(y0,T)*1.15;
+ const X=u=>pl+u/umax*(W-pl-pr),Y=t=>H-pb-Math.min(t,ymax)/ymax*(H-pt-pb);
+ const st_=ymax>80?20:ymax>40?10:ymax>16?5:2;
+ let g='<g class="grid">';for(let t=0;t<=ymax;t+=st_)g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(t)}" y2="${Y(t)}"/><text class="ax" x="${pl-8}" y="${Y(t)+4}" text-anchor="end">${t}</text>`;
+ const xs=umax>2000?500:umax>800?200:umax>400?100:umax>150?50:umax>60?20:10;
+ for(let u=0;u<=umax;u+=xs)g+=`<text class="ax" x="${X(u)}" y="${H-pb+18}" text-anchor="middle">${u}</text>`;
+ g+=`</g><text class="axt" x="${(pl+W-pr)/2}" y="${H-6}" text-anchor="middle">Concurrent users on the server</text><text class="axt" x="${pl-36}" y="${pt-6}">Speed each user can see, tok/s</text>`;
+ let d="";for(let i=0;i<=120;i++){const u=umax*i/120;d+=(i?"L":"M")+X(u).toFixed(1)+" "+Y(b.per(u)).toFixed(1);}
+ let o=`<path class="curve" d="${d}"/>`;
+ o+=`<line class="tl" x1="${pl}" x2="${W-pr}" y1="${Y(T)}" y2="${Y(T)}"/><text class="tag" x="${W-pr}" y="${Y(T)-6}" text-anchor="end" style="fill:light-dark(#9a5b00,#f2b45a)">${T} tok/s target</text>`;
+ if(b.spd>0){o+=`<line class="sl" x1="${X(b.spd)}" x2="${X(b.spd)}" y1="${pt}" y2="${H-pb}"/><text class="tag" x="${X(b.spd)+6}" y="${pt+12}" style="fill:var(--ok)">speed limit · ${b.spd}</text>`;}
+ if(b.mem<=umax){const mx=X(b.mem),left=mx>W-pr-150;o+=`<line class="ml" x1="${mx}" x2="${mx}" y1="${pt}" y2="${H-pb}"/><text class="tag" x="${left?mx-6:mx+6}" y="${pt+30}" text-anchor="${left?"end":"start"}" style="fill:var(--red)">memory full · ${b.mem.toLocaleString("en-GB")}</text>`;}
+ o+=`<line class="hov" id="bhov" x1="0" x2="0" y1="${pt}" y2="${H-pb}" style="display:none"/><rect id="bhit" x="${pl}" y="${pt}" width="${W-pl-pr}" height="${H-pt-pb}" fill="transparent"/>`;
+ svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("height",H);svg.innerHTML=g+o;
+ svg._p={X,umax,pl,pr,W,b,r};
+ /* the worked sum */
+ const kvTokKB=r.kvTok/1024;
+ $("bsteps").innerHTML=[
+  ["1 · Room per node",`${fmt(r.node,0)} GB node × 0.92 = ${fmt(r.node*RES,0)} GB for vLLM, minus ${fmt(r.w)} GB of weights = <b>${fmt(b.room,0)} GB</b> for the KV cache.`],
+  ["2 · Memory per user",`${fk(CTX[st.c])} tokens × ${st.f}% used × ${fmt(kvTokKB,0)} KB per token${m.st?` + ${m.st} MB fixed state`:""} = <b>${fmt(b.kvU,2)} GB</b>.`],
+  ["3 · Users by memory",`${fmt(b.room,0)} ÷ ${fmt(b.kvU,2)} = ${b.memN.toLocaleString("en-GB")} per node, × ${r.nodes} = <b>${b.mem.toLocaleString("en-GB")}</b>.`],
+  ["4 · Users by bandwidth",`Each token step reads the weights once plus every user's KV cache. For ${T} tok/s: ${fmt(r.bwN,0)} GB/s ÷ ${T} = ${fmt(r.bwN/T)} GB per step, minus ${fmt(r.w)} GB weights, ÷ ${fmt(b.kvU,2)} GB = ${b.spdN} per node, × ${r.nodes} = <b>${b.spd.toLocaleString("en-GB")}</b>.`]
+ ].map(([h,p])=>`<article><h3>${h}</h3><p>${p}</p></article>`).join("")+`<article><h3>What this leaves out</h3><p>The bandwidth answer is a ceiling: it uses peak bandwidth and ignores compute, prompt processing and software overhead, so real numbers land lower. vLLM also caps sequences per instance (<code>--max-num-seqs</code>). Benchmark with real prompts before committing.</p></article>`;
+}
+function drawAll(r){drawChart(r);drawTable(r);drawBack(r);}
 function tipFor(el){const r=calc();return el.dataset.names.split(",").map(n=>{const c=CPU.find(x=>x.n===n),k=skuNums(c,r);return `<b>Xeon ${n}</b> · ${c.c} cores · ${c.w} W<br>${c.ch} channels · ${k.mr?"MRDIMM-"+k.mt:"DDR5-6400"} · ${c.sc.replace("_","/")}<br>${fmt(k.bwN,0)} GB/s per node → ${fmt(k.ceil,0)} tok/s`;}).join("<hr style='border:0;border-top:1px solid currentColor;opacity:.3;margin:6px 0'>")+"<br><span style='opacity:.75'>Click to see it in the table</span>";}
 function showTip(el){const t=$("ctip"),box=$("chart").parentElement.getBoundingClientRect(),b=el.querySelector("circle.m").getBoundingClientRect();t.innerHTML=tipFor(el);t.style.opacity=1;let x=b.left-box.left+14,y=b.top-box.top-10;t.style.left="0px";t.style.top="0px";const tw=t.offsetWidth,th=t.offsetHeight;if(x+tw>box.width-8)x=b.left-box.left-tw-8;if(y-th<0)y=b.bottom-box.top+th+8;t.style.left=Math.max(4,x)+"px";t.style.top=(y-th)+"px";}
 function hideTip(){$("ctip").style.opacity=0;}
@@ -374,6 +453,13 @@ $("cpu").addEventListener("change",()=>{const c=CPU.find(x=>x.n===st.cpu);st.so=
 $("nps").addEventListener("change",e=>{st.np=+e.target.value;touch();});
 $("dimm").addEventListener("change",e=>{st.dm=+e.target.value;touch();});
 $("mem").addEventListener("change",e=>{st.me=e.target.value;touch();});
+const bc=$("bchart");
+bc.addEventListener("mousemove",e=>{const P=bc._p;if(!P)return;const rc=bc.getBoundingClientRect(),x=(e.clientX-rc.left)*(P.W/rc.width);if(x<P.pl||x>P.W-P.pr){$("btip").style.opacity=0;$("bhov").style.display="none";return;}
+ const u=Math.round((x-P.pl)/(P.W-P.pl-P.pr)*P.umax),h=$("bhov");h.setAttribute("x1",x);h.setAttribute("x2",x);h.style.display="";
+ const t=$("btip");t.innerHTML=`<b>${u.toLocaleString("en-GB")} users</b><br>about ${fmt(P.b.per(u),1)} tok/s each (ceiling)`+(u>P.b.mem?"<br>beyond what memory can hold":"");t.style.opacity=1;
+ const bx=bc.parentElement.getBoundingClientRect();let lx=e.clientX-bx.left+12;if(lx+t.offsetWidth>bx.width-6)lx=e.clientX-bx.left-t.offsetWidth-12;t.style.left=lx+"px";t.style.top=(e.clientY-bx.top-t.offsetHeight-10)+"px";});
+bc.addEventListener("mouseleave",()=>{$("btip").style.opacity=0;const h=$("bhov");if(h)h.style.display="none";});
+$("tgt").addEventListener("input",()=>render());
 const ch=$("chart");
 ch.addEventListener("mouseover",e=>{const p=e.target.closest(".pt");if(p)showTip(p);});
 ch.addEventListener("mouseout",e=>{const p=e.target.closest(".pt");if(p&&!p.contains(e.relatedTarget))hideTip();});
