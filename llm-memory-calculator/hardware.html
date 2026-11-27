@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory to DIMMs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE same as page 1: a teaching tool for trainers, exact and calm
+   IDEA three layers that connect: what one instance needs, whether it fits its NUMA node, which DIMMs fill the host
+   PICTURE three stacked bars/boards that move together, each layer explaining the one above
+   COLOUR page 1's tokens: graphite weights, ultramarine KV cache, green fixed state; pale ultramarine = reserved but unused */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#0d0e18);--ink:light-dark(#14110f,#eceef6);--mute:light-dark(#5d616c,#a3a8b8);--line:light-dark(#e2e3ea,#2a2d40);--panel:light-dark(#f4f5fb,#161827);--blue:light-dark(#1d2bd8,#8b95ff);--wt:light-dark(#3a3e49,#b9bdcb);--red:light-dark(#c1121f,#ff6b72);--ok:light-dark(#0f7a4a,#5fd39b);--hi:light-dark(#e6e8ff,#232a6b);--res:light-dark(#cdd1ff,#2b3270);--os:light-dark(#d9dae2,#3a3d52);--n2:light-dark(#6b72e8,#5b64d6)}
+*{box-sizing:border-box;min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.big{font-family:Spectral,Georgia,serif;font-weight:600;letter-spacing:-.02em;line-height:1.05;text-wrap:balance}
+h1{font-size:clamp(32px,4.4vw,48px);margin:0 0 8px}
+h2{font-size:clamp(24px,3vw,32px);margin:0 0 6px}
+h3{font-size:18px;margin:0 0 4px}
+p{margin:0 0 10px;max-width:72ch}
+a{color:var(--blue)}
+.band{padding:clamp(24px,3.5vw,52px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+.lede{color:var(--mute);font-size:17px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.tabs a{display:inline-flex;align-items:center;min-height:40px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);font-weight:600;font-size:15px}
+.tabs a[aria-current]{background:var(--hi);border-color:var(--blue);color:var(--blue)}
+.grid{display:grid;grid-template-columns:minmax(0,4fr) minmax(0,8fr);gap:28px;margin-top:22px;align-items:start}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+label{display:flex;justify-content:space-between;gap:10px;font-weight:600;font-size:15px;margin:14px 0 4px}
+label output{font-weight:700;color:var(--blue);white-space:nowrap;font-variant-numeric:tabular-nums}
+select{font:16px Inter,sans-serif;width:100%;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+input[type=range]{width:100%;height:40px;accent-color:var(--blue);margin:0}
+.hint{font-size:13px;color:var(--mute);margin:4px 0 0}
+.sep{border-top:1px solid var(--line);margin:18px 0 0;padding-top:4px;font-size:13px;font-weight:700;color:var(--mute);letter-spacing:.04em}
+.big{font-size:clamp(40px,5.6vw,64px);margin:2px 0 0;font-variant-numeric:tabular-nums}
+.verdict{font-size:17px;font-weight:600;margin:6px 0 18px}
+.verdict.no{color:var(--red)}.verdict.yes{color:var(--ok)}.verdict.mid{color:light-dark(#9a5b00,#f2b45a)}
+.layer{margin-top:22px}
+.layer .t{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.layer .t b{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--bg);align-items:center;justify-content:center;font-size:14px;flex:none}
+.layer .t span{font-weight:600}
+.layer .t small{color:var(--mute);font-size:14px}
+.bar{position:relative;height:48px;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;background:var(--bg)}
+.seg{height:100%;transition:width .35s ease;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden}
+.seg.w{background:var(--wt);color:var(--bg)}.seg.k{background:var(--blue)}.seg.s{background:var(--ok)}
+.seg.r{background:var(--res);color:var(--blue)}.seg.o{background:var(--os);color:var(--mute)}
+.ticks{position:relative;height:40px;margin-top:2px}
+.tick{position:absolute;top:0;transform:translateX(-50%);font-size:12px;color:var(--mute);white-space:nowrap}
+.tick::before{content:"";display:block;width:2px;height:10px;margin:0 auto 2px;background:var(--mute)}
+.tick.on{color:var(--ink);font-weight:700}.tick.on::before{background:var(--ink)}
+.need{position:absolute;top:-52px;height:52px;width:3px;background:light-dark(#c77700,#f2b45a);transform:translateX(-50%)}
+.cap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--mute);margin-top:6px}
+.cap b{color:var(--ink)}
+.host{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.sock{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--bg)}
+.sock h4{margin:0 0 8px;font-size:14px;display:flex;justify-content:space-between;gap:8px}
+.sock h4 span{color:var(--mute);font-weight:500}
+.slots{display:grid;gap:4px}
+.slot{height:54px;border-radius:4px;display:flex;align-items:flex-end;justify-content:center;font-size:11px;font-weight:700;color:#fff;padding-bottom:3px}
+.nodes{display:grid;gap:4px;margin-top:4px}
+.nodes div{font-size:12px;color:var(--mute);text-align:center;border-top:2px solid var(--line);padding-top:2px}
+.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(9.5em,1fr));gap:12px;margin-top:22px}
+.nums div{border-top:2px solid var(--line);padding-top:6px}
+.nums b{display:block;font-size:21px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.nums span{font-size:13px;color:var(--mute)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;margin-top:8px;color:var(--mute)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(16em,1fr));gap:14px;margin-top:14px}
+.steps article{border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--bg)}
+.steps article p{font-size:15px;color:var(--mute);margin:0}
+.steps article code{font-size:13px}
+.scen{display:grid;grid-template-columns:repeat(auto-fit,minmax(14em,1fr));gap:12px;margin-top:14px}
+.scen button{font:inherit;text-align:left;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:14px;cursor:pointer;min-height:44px}
+.scen button b{display:block;font-size:16px}
+.scen button span{font-size:14px;color:var(--mute)}
+.scen button.sel{border-color:var(--blue);background:var(--hi)}
+.story{margin-top:14px;font-size:17px;min-height:3em}
+.src li{margin-bottom:6px}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+@media(max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}.result{order:-1}}
+@media(prefers-reduced-motion:reduce){.seg{transition:none}}
+</style>
+</head>
+<body>
+<section class="band"><div class="wrap">
+  <nav class="tabs" aria-label="Calculator pages"><a id="tab1" href="./">1 · Memory per instance</a><a href="hardware.html" aria-current="page">2 · NUMA nodes and DIMMs</a></nav>
+  <h1>From memory to DIMMs</h1>
+  <p class="lede">Page 1 tells you what one model instance needs. This page follows that number down to the hardware: does it fit its NUMA node after vLLM's 92% reservation, and which DIMMs go in the server? Everything moves together.</p>
+  <div class="grid">
+    <div class="panel" id="controls">
+      <div class="sep" style="border:0;margin:0;padding:0">WORKLOAD (SAME AS PAGE 1)</div>
+      <label for="model">Model <output id="mmax"></output></label>
+      <select id="model"></select>
+      <label for="ctx">Context per request <output id="ctxo"></output></label>
+      <input type="range" id="ctx" min="0" max="8" step="1" value="3">
+      <label for="users">Concurrent users <output id="userso"></output></label>
+      <input type="range" id="users" min="1" max="256" step="1" value="40">
+      <label for="fill">Context actually used <output id="fillo"></output></label>
+      <input type="range" id="fill" min="10" max="100" step="10" value="100">
+      <div class="sep">SERVER</div>
+      <label for="cpu">Processor <output id="cpuo"></output></label>
+      <select id="cpu"></select>
+      <label for="sock">Sockets</label>
+      <select id="sock"><option value="1">1 socket</option><option value="2" selected>2 sockets</option></select>
+      <label for="nps">NUMA nodes per socket</label>
+      <select id="nps"><option value="1">1 (sub-NUMA off)</option><option value="2">2 (SNC2)</option><option value="3">3 (SNC3)</option></select>
+      <p class="hint" id="npshint">Set by the BIOS. Check yours with <code>numactl -H</code>.</p>
+      <label for="dimm">DIMM size, one per channel</label>
+      <select id="dimm"><option>16</option><option selected>32</option><option>64</option><option>96</option><option>128</option></select>
+      <label for="mem">Memory type</label>
+      <select id="mem"><option value="ddr">DDR5 RDIMM</option><option value="mr">MRDIMM</option></select>
+      <p class="hint" id="memhint"></p>
+    </div>
+    <div class="result" aria-live="polite">
+      <div class="hint">The host</div>
+      <div class="big" id="hostbig"></div>
+      <div class="verdict" id="verdict"></div>
+
+      <div class="layer">
+        <div class="t"><b>1</b><span>What one instance needs</span><small id="l1s"></small></div>
+        <div class="bar" id="bar1"><div class="seg w" id="w1"></div><div class="seg k" id="k1"></div><div class="seg s" id="s1"></div></div>
+        <div class="ticks" id="ticks1"></div>
+      </div>
+
+      <div class="layer">
+        <div class="t"><b>2</b><span>Does it fit its NUMA node?</span><small id="l2s"></small></div>
+        <div class="bar" id="bar2"><div class="seg w" id="w2"></div><div class="seg k" id="k2"></div><div class="seg s" id="s2"></div><div class="seg r" id="r2"></div><div class="seg o" id="o2"></div></div>
+        <div class="cap" id="cap2"></div>
+      </div>
+
+      <div class="layer">
+        <div class="t"><b>3</b><span>What DIMMs fill the host</span><small id="l3s"></small></div>
+        <div class="host" id="host"></div>
+      </div>
+
+      <div class="legend"><span><i style="background:var(--wt)"></i>Weights</span><span><i style="background:var(--blue)"></i>KV cache</span><span><i style="background:var(--ok)"></i>Fixed state</span><span><i style="background:var(--res)"></i>Reserved by vLLM, unused</span><span><i style="background:var(--os)"></i>Left for the OS (8%)</span></div>
+      <div class="nums" id="nums"></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="band" style="background:var(--panel)"><div class="wrap">
+  <h2>How the pieces connect</h2>
+  <p class="lede">Three different questions, each answered by a different knob. Mixing them up is where the confusion comes from.</p>
+  <div class="steps">
+    <article><h3>1 · Instance need</h3><p>Weights plus KV cache plus fixed state, from page 1. Only the model, context, users and fill change it. Divide by 0.92 and round up to a catalog class: 32, 48, 64 or 96 GB.</p></article>
+    <article><h3>2 · NUMA node budget</h3><p>Run one vLLM instance per NUMA node, users split between them. vLLM reserves 92% of its node's memory at startup (<code>gpu-memory-utilization</code>), whatever the instance needs; the OS keeps the rest. The instance must fit inside that 92%.</p></article>
+    <article><h3>3 · Host DIMMs</h3><p>Every memory channel gets one DIMM, because decode speed is set by memory bandwidth. The DIMM count is fixed by the processor (sockets × channels); the DIMM size only buys capacity. MRDIMM raises bandwidth, which raises tokens per second.</p></article>
+    <article><h3>Why bandwidth sets speed</h3><p>Each new token reads all the weights from memory once. So one user can't go faster than bandwidth ÷ weight size. Real speed lands below this ceiling, but it moves with it.</p></article>
+  </div>
+</div></section>
+
+<section class="band"><div class="wrap">
+  <h2>Try these with the room</h2>
+  <p class="lede">Each one sets the controls and tells the story to say out loud.</p>
+  <div class="scen" id="scen"></div>
+  <p class="story" id="story"></p>
+</div></section>
+
+<section class="band" style="background:var(--panel)"><div class="wrap">
+  <h2>Where the numbers come from</h2>
+  <ul class="src">
+    <li>Cores, TDP, DDR5 and MRDIMM speeds for every SKU: Supermicro CPU tables for <a href="https://www.supermicro.com/en/support/resources/cpu-intel-xeon-6900">Xeon 6900 series</a> and <a href="https://www.supermicro.com/en/support/resources/cpu-intel-xeon-6700-6500">Xeon 6700/6500 series</a>; confirm a SKU on <a href="https://www.intel.com/content/www/us/en/products/sku/241643.html">Intel ARK</a>. Channels per socket: 12 on Xeon 6900P, 8 on Xeon 6700P and 6500P. Only P-core SKUs are listed, because AMX, the matrix engine vLLM uses for BF16, is on P-cores.</li>
+    <li>The 92% reservation per NUMA node: Intel Inference Microservices, <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/configuration/environment-variables">Environment variables</a>. Memory classes: <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/models-and-hardware/supported-intel-platforms">Supported Intel platforms</a>.</li>
+    <li>Peak bandwidth per socket = channels × 8 bytes × transfer rate. It's the theoretical peak; measured bandwidth is lower.</li>
+    <li>The decode ceiling (tokens per second ≤ batch × bandwidth ÷ model size) follows <a href="https://www.together.ai/blog/llm-inference">Together AI's LLM inference guide</a>. For scale: Lenovo measured about 30 tokens per second per user for Llama 3 8B on 96-core Xeon 6 at low concurrency (<a href="https://lenovopress.lenovo.com/lp2463-power-efficient-llm-inference-with-intel-xeon-6-processors">LP2463</a>).</li>
+    <li>One vLLM instance per NUMA node follows Intel's <a href="https://intel.github.io/optimization-zone/software/vllm/">vLLM on Xeon guide</a>, which keeps each model copy on local memory. Which sub-NUMA modes a server offers depends on the processor and the BIOS; the selector here is for exploring, not a statement of what each SKU supports.</li>
+    <li>Model numbers and the KV cache formula are the same as on <a href="./" id="srcp1">page 1</a>. All figures are planning estimates: measure with real prompts before setting limits.</li>
+  </ul>
+</div></section>
+
+<footer class="band" style="border-top:1px solid var(--line);padding-block:20px"><div class="wrap" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:15px;color:var(--mute)"><span>Made by <b style="color:var(--ink)">Hind Azegrouz</b></span><a href="https://hinda00.github.io/">hinda00.github.io</a></div></footer>
+
+<script>
+{
+const CTX=[1024,2048,4096,8192,16384,32768,65536,131072,262144];
+const M=[
+ {n:"Llama 3.2 3B Instruct",L:28,H:8,d:128,B:3.21,max:131072},
+ {n:"Qwen3-4B",L:36,H:8,d:128,B:4.02,max:40960},
+ {n:"Mistral-7B Instruct v0.3",L:32,H:8,d:128,B:7.25,max:32768},
+ {n:"Qwen3-8B",L:36,H:8,d:128,B:8.19,max:40960},
+ {n:"Phi-4-reasoning",L:40,H:10,d:128,B:14.7,max:32768},
+ {n:"Qwen3-30B-A3B (mixture-of-experts)",L:48,H:4,d:128,B:30.5,max:40960,moe:3.3},
+ {n:"Qwen3.5-4B (hybrid attention)",L:32,kvL:8,H:4,d:256,B:5.0,st:53,max:262144}
+];
+/* fam: ch = channels per socket, ddr/mr = MT/s (0 = no MRDIMM), s = max sockets for the 1S-only parts */
+const F={
+ "6900P":{ch:12,label:"Xeon 6900P · 12 channels"},
+ "6700P":{ch:8,label:"Xeon 6700P · 8 channels"},
+ "6500P":{ch:8,label:"Xeon 6500P · 8 channels"}
+};
+const CPU=[
+ ["6980P","6900P",128,500,8800],["6979P","6900P",120,500,8800],["6972P","6900P",96,500,8800],["6952P","6900P",96,400,8800],["6962P","6900P",72,500,8800],["6960P","6900P",72,500,8800],["6944P","6900P",72,350,0],
+ ["6787P","6700P",86,350,8000],["6788P","6700P",86,350,0],["6781P","6700P",80,350,8000,1],["6776P","6700P",64,350,8000],["6774P","6700P",64,350,8000,1],["6767P","6700P",64,350,8000],["6768P","6700P",64,330,0],["6761P","6700P",64,350,8000,1],["6760P","6700P",64,330,0],["6747P","6700P",48,330,8000],["6748P","6700P",48,300,0],["6741P","6700P",48,300,0,1],["6740P","6700P",48,270,0],["6736P","6700P",36,205,0],["6745P","6700P",32,300,0],["6738P","6700P",32,270,0],["6737P","6700P",32,270,0],["6732P","6700P",32,350,0],["6731P","6700P",32,245,0,1],["6730P","6700P",32,250,0],
+ ["6530P","6500P",32,225,0],["6527P","6500P",24,255,0],["6521P","6500P",24,225,0,1],["6520P","6500P",24,210,0],["6517P","6500P",16,190,0],["6515P","6500P",16,150,0],["6511P","6500P",16,150,0,1]
+].map(([n,f,c,w,mr,one])=>({n,f,c,w,mr,one:!!one,ch:F[f].ch}));
+const CLASSES=[32,48,64,96],RES=0.92,DDR=6400;
+const S=[
+ {t:"The 1 TB question",s:"Llama-class 8B · 6787P · 64 GB DIMMs",m:3,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:64,me:"ddr",story:"Sixteen 64 GB DIMMs make 1 TB, as in Lenovo's MLPerf server. Look at layer 2: the instance uses a sliver, the rest is pale blue, reserved by vLLM but never used. The terabyte came from filling every channel with a common DIMM size, not from the model."},
+ {t:"Same speed, half the memory",s:"Same server · 32 GB DIMMs",m:3,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:32,me:"ddr",story:"Swap to 32 GB DIMMs: still sixteen of them, so the bandwidth and the decode ceiling don't move. Each node still has plenty of room. Capacity was never the constraint for an 8B model."},
+ {t:"Twelve channels",s:"Same workload · 6952P",m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"ddr",story:"Xeon 6900P has 12 channels per socket instead of 8: 24 DIMMs, and 50% more bandwidth per socket. The decode ceiling rises with it. More channels, not more gigabytes, is what makes each user faster."},
+ {t:"MRDIMM",s:"6952P · MRDIMM-8800",m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"mr",story:"MRDIMM runs at 8800 MT/s instead of 6400. Same capacity, about 38% more bandwidth, so the ceiling per user jumps too. This is the memory upgrade that buys tokens per second."},
+ {t:"Sub-NUMA and chat",s:"6952P · SNC3",m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:3,dm:32,me:"ddr",story:"Split each socket into 3 NUMA nodes and you run 6 instances. Each needs less memory, but each reads from only 4 channels, so the ceiling per user drops to a third. For interactive chat, one node per socket is usually the better choice. Measure both."},
+ {t:"When capacity matters",s:"Qwen3-30B-A3B · 6787P · 16 GB DIMMs",m:5,c:5,u:64,f:100,cpu:"6787P",so:2,np:1,dm:16,me:"ddr",story:"A 30B mixture-of-experts model at 32K context for 64 users: 61 GB of weights plus a large cache per instance. With 16 GB DIMMs each node has only 128 GB, so it doesn't fit. Step up to 32 GB DIMMs and it fits the node, but it is still above the catalog's 96 GB class. This is the case where gigabytes, not channels, are the limit."}
+];
+const $=id=>document.getElementById(id);
+const fmt=(x,dp=1)=>x.toLocaleString("en-GB",{minimumFractionDigits:dp,maximumFractionDigits:dp});
+const fk=t=>t>=1024?(t/1024)+"K":String(t);
+const st={m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"ddr",sc:-1,custom:null};
+/* read the workload from page 1's link, if any */
+const q=new URLSearchParams(location.search);
+if(q.has("m")){const m=+q.get("m");if(m>=0&&m<M.length)st.m=m;else if(m===-1){const c={n:"Custom (from page 1)"};for(const k of["L","kvL","H","d","B","st"])c[k]=parseFloat(q.get(k))||0;if(c.L&&c.H&&c.d&&c.B){c.kvL=c.kvL||c.L;c.max=262144;st.custom=c;st.m=-1;}}}
+for(const[k,lo,hi] of[["c",0,8],["u",1,256],["f",10,100]])if(q.has(k)){const v=+q.get(k);if(v>=lo&&v<=hi)st[k]=v;}
+$("model").innerHTML=M.map((m,i)=>`<option value="${i}">${m.n}</option>`).join("")+(st.custom?`<option value="-1">${st.custom.n}</option>`:"");
+$("cpu").innerHTML=Object.keys(F).map(f=>`<optgroup label="${F[f].label}">`+CPU.filter(c=>c.f===f).map(c=>`<option value="${c.n}">Xeon ${c.n} · ${c.c} cores${c.one?" · 1S":""}</option>`).join("")+`</optgroup>`).join("");
+$("scen").innerHTML=S.map((s,i)=>`<button type="button" data-i="${i}"><b>${s.t}</b><span>${s.s}</span></button>`).join("");
+const model=()=>st.m===-1?st.custom:M[st.m];
+function calc(){
+ const m=model(),c=CPU.find(x=>x.n===st.cpu);
+ const so=c.one?1:st.so,nodes=so*st.np,inst=nodes,up=Math.ceil(st.u/inst);
+ const kvL=m.kvL||m.L,kvTok=2*kvL*m.H*m.d*2,ctx=CTX[st.c];
+ const w=m.B*2,kv=up*ctx*st.f/100*kvTok/1e9,sg=up*(m.st||0)/1000,need=w+kv+sg,hr=need/RES;
+ const cls=CLASSES.find(k=>hr<=k);
+ const mr=st.me==="mr"&&c.mr>0,mt=mr?c.mr:DDR,dimms=so*c.ch,host=dimms*st.dm,node=host/nodes,res=node*RES;
+ const chn=c.ch/st.np,bwS=c.ch*8*mt/1000,bwN=chn*8*mt/1000,ceil=bwN/w;
+ return{m,c,so,nodes,inst,up,kvTok,ctx,w,kv,sg,need,hr,cls,mr,mt,dimms,host,node,res,chn,bwS,bwN,ceil,fits:hr<=node};
+}
+function pct(x,a){return Math.max(0,x/a*100)+"%";}
+function lab(el,v,a,px){el.textContent=v/a*px>64?fmt(v)+" GB":"";}
+function render(){
+ const r=calc(),m=r.m,c=r.c;
+ $("model").value=String(st.m);$("ctx").value=st.c;$("users").value=st.u;$("fill").value=st.f;
+ $("cpu").value=st.cpu;$("sock").value=String(r.so);$("sock").disabled=c.one;$("nps").value=String(st.np);$("dimm").value=String(st.dm);
+ if(!c.mr&&st.me==="mr")st.me="ddr";
+ $("mem").value=st.me;$("mem").options[1].disabled=!c.mr;$("mem").options[1].textContent=c.mr?`MRDIMM-${c.mr}`:"MRDIMM (not on this SKU)";$("mem").options[0].textContent=`DDR5-${DDR} RDIMM`;
+ $("memhint").textContent=c.mr?"":`Xeon ${c.n} runs DDR5 only.`;
+ $("ctxo").textContent=fk(r.ctx)+" tokens";$("userso").textContent=st.u;$("fillo").textContent=st.f+"%";
+ $("mmax").textContent="max "+fk(m.max)+(m.moe?" · "+m.moe+"B active":"");
+ $("cpuo").textContent=c.c+" cores · "+c.w+" W";
+ $("tab1").href=p1link();$("srcp1").href=p1link();
+ $("hostbig").textContent=`${r.dimms} × ${st.dm} GB = ${r.host>=1024?fmt(r.host/1024,r.host%1024?1:0)+" TB":r.host+" GB"}`;
+ const v=$("verdict");
+ if(!r.fits){v.className="verdict no";v.textContent=`Too big for one NUMA node (${fmt(r.hr)} GB needed, ${fmt(r.node)} GB per node). Cut context first, then users, then bigger DIMMs.`;}
+ else if(!r.cls){v.className="verdict mid";v.textContent=`Fits the node, but above the catalog's largest class (96 GB). Cut context or split users across more nodes.`;}
+ else{v.className="verdict yes";v.textContent=`${r.inst} instance${r.inst>1?"s":""}, about ${r.up} user${r.up>1?"s":""} each, every one in the ${r.cls} GB class with ${fmt(r.node-r.hr)} GB to spare per node.`;}
+ /* layer 1 */
+ const a1=Math.max(100,Math.ceil(r.hr*1.12/16)*16),bw1=$("bar1").clientWidth||600;
+ $("w1").style.width=pct(r.w,a1);$("k1").style.width=pct(r.kv,a1);$("s1").style.width=pct(r.sg,a1);
+ lab($("w1"),r.w,a1,bw1);lab($("k1"),r.kv,a1,bw1);lab($("s1"),r.sg,a1,bw1);
+ const marks=CLASSES.concat(a1>140?[128]:[]).concat(a1>300?[256]:[]).filter(k=>k<a1);
+ $("ticks1").innerHTML=marks.map(k=>`<div class="tick${k===r.cls?" on":""}" style="left:${k/a1*100}%">${k} GB</div>`).join("")+`<div class="need" style="left:${Math.min(r.hr/a1*100,99.5)}%" title="Need ÷ 0.92"></div>`;
+ $("l1s").textContent=`${fmt(r.need)} GB for ${r.up} user${r.up>1?"s":""}; ÷ 0.92 = ${fmt(r.hr)} GB (orange line)`;
+ /* layer 2 */
+ const a2=Math.max(r.node,r.need),bw2=$("bar2").clientWidth||600,used=Math.min(r.need,r.res);
+ const sc=r.need>a2?a2/r.need:1;
+ $("w2").style.width=pct(r.w*sc,a2);$("k2").style.width=pct(r.kv*sc,a2);$("s2").style.width=pct(r.sg*sc,a2);
+ $("r2").style.width=pct(Math.max(0,r.res-used),a2);$("o2").style.width=pct(r.fits?r.node-r.res:Math.max(0,r.node-r.need),a2);
+ lab($("w2"),r.w,a2,bw2);lab($("k2"),r.kv,a2,bw2);$("s2").textContent="";
+ $("r2").textContent=(r.res-used)/a2*bw2>110?"reserved, unused":"";$("o2").textContent=(r.node-r.res)/a2*bw2>40?"OS":"";
+ $("cap2").innerHTML=`<span>Instance uses <b>${fmt(r.need)} GB</b></span><span>vLLM reserves <b>${fmt(r.res)} GB</b> (92%)</span><span>Node <b>${fmt(r.node)} GB</b></span>`;
+ $("l2s").textContent=`${r.nodes} node${r.nodes>1?"s":""}, one instance each`;
+ /* layer 3 */
+ const cols=c.ch,per=r.chn,shade=n=>n%2?"var(--n2)":"var(--blue)";
+ let h="";
+ for(let s=0;s<r.so;s++){
+  h+=`<div class="sock"><h4>Socket ${s} <span>${c.ch} channels · ${fmt(r.bwS,0)} GB/s</span></h4><div class="slots" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">`;
+  for(let i=0;i<cols;i++){const n=Math.floor(i/per);h+=`<div class="slot" style="background:${shade(n)}" title="Channel ${i}, NUMA node ${s*st.np+n}">${cols<=8?st.dm:""}</div>`;}
+  h+=`</div><div class="nodes" style="grid-template-columns:repeat(${st.np},minmax(0,1fr))">`;
+  for(let n=0;n<st.np;n++)h+=`<div>node ${s*st.np+n} · ${fmt(r.node,0)} GB</div>`;
+  h+=`</div></div>`;
+ }
+ $("host").innerHTML=h;
+ $("l3s").textContent=`${r.so} × ${c.ch} channels, ${r.mr?"MRDIMM":"DDR5"}-${r.mt}`;
+ $("nums").innerHTML=[
+  [fmt(r.hr)+" GB","Instance need ÷ 0.92"],
+  [r.cls?r.cls+" GB":"> 96 GB","Catalog class"],
+  [fmt(r.node,0)+" GB","Memory per node"],
+  [fmt(r.bwN,0)+" GB/s","Peak bandwidth per node"],
+  [fmt(r.ceil,0)+" tok/s","Ceiling for one user"],
+  [fmt(r.kvTok/1024,0)+" KB","KV cache per token"]
+ ].map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join("");
+ for(const b of document.querySelectorAll(".scen button"))b.classList.toggle("sel",+b.dataset.i===st.sc);
+ $("story").textContent=st.sc>=0?S[st.sc].story:"";
+ const p=new URLSearchParams({m:st.m,c:st.c,u:st.u,f:st.f,cpu:st.cpu,so:r.so,np:st.np,dm:st.dm,me:st.me});
+ if(st.custom)for(const k of["L","kvL","H","d","B","st"])p.set(k,st.custom[k]);
+ history.replaceState(null,"","?"+p);
+}
+function p1link(){const p=new URLSearchParams({m:st.m,c:st.c,u:Math.min(st.u,64),f:st.f});if(st.custom)for(const k of["L","kvL","H","d","B","st"])p.set(k,st.custom[k]);return "./?"+p;}
+/* server settings from a shared link */
+if(q.has("cpu")&&CPU.some(c=>c.n===q.get("cpu")))st.cpu=q.get("cpu");
+if(["1","2"].includes(q.get("so")))st.so=+q.get("so");
+if(["1","2","3"].includes(q.get("np")))st.np=+q.get("np");
+if(["16","32","64","96","128"].includes(q.get("dm")))st.dm=+q.get("dm");
+if(["ddr","mr"].includes(q.get("me")))st.me=q.get("me");
+const touch=()=>{st.sc=-1;render();};
+$("model").addEventListener("change",e=>{st.m=+e.target.value;touch();});
+$("ctx").addEventListener("input",e=>{st.c=+e.target.value;touch();});
+$("users").addEventListener("input",e=>{st.u=+e.target.value;touch();});
+$("fill").addEventListener("input",e=>{st.f=+e.target.value;touch();});
+$("cpu").addEventListener("change",e=>{st.cpu=e.target.value;touch();});
+$("sock").addEventListener("change",e=>{st.so=+e.target.value;touch();});
+$("nps").addEventListener("change",e=>{st.np=+e.target.value;touch();});
+$("dimm").addEventListener("change",e=>{st.dm=+e.target.value;touch();});
+$("mem").addEventListener("change",e=>{st.me=e.target.value;touch();});
+$("scen").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const x=S[+b.dataset.i];Object.assign(st,{m:x.m,c:x.c,u:x.u,f:x.f,cpu:x.cpu,so:x.so,np:x.np,dm:x.dm,me:x.me,sc:+b.dataset.i});render();$("hostbig").scrollIntoView({behavior:"smooth",block:"center"});});
+render();
+new ResizeObserver(()=>render()).observe($("bar1"));
+}
+</script>
+</body>
+</html>

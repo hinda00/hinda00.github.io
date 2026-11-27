@@ -85,12 +85,17 @@ summary{cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:
 code{font-size:14px;overflow-wrap:anywhere}
 .src li{margin-bottom:6px}
 a{color:var(--blue)}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.tabs a{display:inline-flex;align-items:center;min-height:40px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--ink);font-weight:600;font-size:15px}
+.tabs a[aria-current]{background:var(--hi);border-color:var(--blue);color:var(--blue)}
+.next{display:inline-flex;align-items:center;min-height:44px;margin-top:18px;font-weight:600}
 @media(max-width:860px){.grid,.formula{grid-template-columns:minmax(0,1fr)}.result{order:-1;position:static}.explain{position:static}}
 @media(prefers-reduced-motion:reduce){.seg{transition:none}}
 </style>
 </head>
 <body>
 <section class="band"><div class="wrap">
+  <nav class="tabs" aria-label="Calculator pages"><a href="./" aria-current="page">1 · Memory per instance</a><a id="tab2" href="hardware.html">2 · NUMA nodes and DIMMs</a></nav>
   <h1>How much memory does this model need?</h1>
   <p class="lede">Move the sliders and watch the server's memory fill: first the model's weights, then the KV cache for every token every user keeps in play. Tap any number in the formula to see what it means.</p>
   <div class="grid">
@@ -125,6 +130,7 @@ a{color:var(--blue)}
       <div class="ticks" id="ticks"></div>
       <div class="legend"><span><i style="background:var(--wt)"></i>Weights</span><span><i style="background:var(--blue)"></i>KV cache</span><span><i style="background:var(--ok)"></i>Fixed state (hybrid models)</span><span>Markers: the catalog's memory classes</span></div>
       <div class="nums" id="nums"></div>
+      <a class="next" id="next" href="hardware.html">Next: does it fit the server? NUMA nodes and DIMMs →</a>
     </div>
   </div>
 </div></section>
@@ -250,6 +256,9 @@ function render(){
  for(const a of document.querySelectorAll(".gloss article")) a.classList.toggle("sel",a.dataset.t===st.term);
  for(const b of document.querySelectorAll(".scen button")) b.classList.toggle("sel",+b.dataset.i===st.sc);
  $("story").textContent=st.sc>=0?S[st.sc].story:"";
+ const p=new URLSearchParams({m:st.custom?-1:st.m,c:st.c,u:st.u,f:st.f});
+ if(st.custom)for(const k of ["L","kvL","H","d","B","st"])p.set(k,st[k]);
+ $("tab2").href=$("next").href="hardware.html?"+p;
 }
 const touch=()=>{st.sc=-1;render();};
 $("model").addEventListener("change",e=>{const i=+e.target.value;if(i>=0)setModel(i);else st.custom=true;touch();});
@@ -264,7 +273,12 @@ document.addEventListener("click",e=>{
  if(s){const x=S[+s.dataset.i];setModel(x.m);Object.assign(st,{c:x.c,u:x.u,f:x.f,sc:+s.dataset.i,term:x.m===6?"kvL":x.m===5&&x.t.startsWith("Fewer")?"H":x.m===5?"B":x.c>=5?"ctx":"kv"});render();$("total").scrollIntoView({behavior:"smooth",block:"center"});}
 });
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches(".gloss article")){st.term=e.target.dataset.t;render();}});
-setModel(0);render();
+setModel(0);
+{const q=new URLSearchParams(location.search),m=+q.get("m");
+ if(q.has("m")&&m>=0&&m<M.length)setModel(m);
+ else if(q.get("m")==="-1"){const c={};for(const k of ["L","kvL","H","d","B","st"])c[k]=parseFloat(q.get(k));if(c.L>0&&c.H>0&&c.d>0&&c.B>0){Object.assign(st,{L:c.L,kvL:c.kvL>0?Math.min(c.kvL,c.L):c.L,H:c.H,d:c.d,B:c.B,st:c.st>=0?c.st:0,custom:true});}}
+ for(const[k,lo,hi] of [["c",0,8],["u",1,64],["f",10,100]])if(q.has(k)){const v=+q.get(k);if(v>=lo&&v<=hi)st[k]=v;}}
+render();
 const ro=new ResizeObserver(()=>render());ro.observe($("bar"));
 }
 </script>
