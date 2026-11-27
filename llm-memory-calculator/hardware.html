@@ -151,7 +151,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
       <select id="nps"><option value="1">1 (sub-NUMA off)</option><option value="2">2 (SNC2)</option><option value="3">3 (SNC3)</option></select>
       <p class="hint" id="npshint">Set by the BIOS. Check yours with <code>numactl -H</code>.</p>
       <label for="dimm">DIMM size, one per channel</label>
-      <select id="dimm"><option>16</option><option selected>32</option><option>64</option><option>96</option><option>128</option></select>
+      <select id="dimm"><option>16</option><option>32</option><option selected>64</option><option>96</option><option>128</option></select>
       <label for="mem">Memory type</label>
       <select id="mem"><option value="ddr">DDR5 RDIMM</option><option value="mr">MRDIMM</option></select>
       <p class="hint" id="memhint"></p>
@@ -274,7 +274,7 @@ const CLASSES=[32,48,64,96],RES=0.92,DDR=6400;
 const $=id=>document.getElementById(id);
 const fmt=(x,dp=1)=>x.toLocaleString("en-GB",{minimumFractionDigits:dp,maximumFractionDigits:dp});
 const fk=t=>t>=1024?(t/1024)+"K":String(t);
-const st={m:3,c:3,u:40,f:100,cpu:"6952P",so:2,np:1,dm:32,me:"ddr",custom:null};
+const st={m:7,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:64,me:"ddr",custom:null};
 /* read the workload from page 1's link, if any */
 const q=new URLSearchParams(location.search);
 if(q.has("m")){const m=+q.get("m");if(m>=0&&m<M.length)st.m=m;else if(m===-1){const c={n:"Custom (from page 1)"};for(const k of["L","kvL","H","d","B","st"])c[k]=parseFloat(q.get(k))||0;if(c.L&&c.H&&c.d&&c.B){c.kvL=c.kvL||c.L;c.max=262144;st.custom=c;st.m=-1;}}}
