@@ -116,6 +116,7 @@ table.sk button:hover{border-color:var(--blue)}
 #bchart .tl{stroke:light-dark(#c77700,#f2b45a);stroke-width:1.5;stroke-dasharray:5 4}
 #bchart .ml{stroke:var(--red);stroke-width:1.5;stroke-dasharray:5 4}
 #bchart .sl{stroke:var(--ok);stroke-width:1.5}
+#bchart .cl{stroke:var(--mute);stroke-width:1.5;stroke-dasharray:2 3}
 #bchart .hov{stroke:var(--ink);stroke-width:1;opacity:.35}
 #bchart .tag{font:600 12px Inter,sans-serif}
 @media(max-width:860px){.back{grid-template-columns:minmax(0,1fr)}}
@@ -149,12 +150,24 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
       <p class="hint" id="sockhint"></p>
       <label for="nps">NUMA nodes per socket</label>
       <select id="nps"><option value="1">1 (sub-NUMA off)</option><option value="2">2 (SNC2)</option><option value="3">3 (SNC3)</option></select>
-      <p class="hint" id="npshint">Set by the BIOS. Check yours with <code>numactl -H</code>.</p>
-      <label for="dimm">DIMM size, one per channel</label>
+      <p class="hint" id="npshint"></p>
+      <label for="dimm">DIMM size</label>
       <select id="dimm"><option>16</option><option>32</option><option selected>64</option><option>96</option><option>128</option></select>
+      <label for="dpc">DIMMs per channel</label>
+      <select id="dpc"><option value="1">1 per channel (full speed)</option><option value="2">2 per channel (more capacity)</option></select>
       <label for="mem">Memory type</label>
-      <select id="mem"><option value="ddr">DDR5 RDIMM</option><option value="mr">MRDIMM</option></select>
+      <select id="mem"><option value="ddr">DDR5-6400 RDIMM</option><option value="d8">DDR5-8000 RDIMM</option><option value="mr">MRDIMM</option></select>
       <p class="hint" id="memhint"></p>
+      <label for="eff">Bandwidth you actually get <output id="effo"></output></label>
+      <input type="range" id="eff" min="50" max="100" step="5" value="75">
+      <p class="hint">Share of the theoretical peak. Measured (STREAM-like) bandwidth usually lands around 70–80% of peak; 100% gives the pure theoretical ceiling.</p>
+      <div class="sep">SOFTWARE</div>
+      <label for="par">How vLLM uses the NUMA nodes</label>
+      <select id="par"><option value="dp">One copy of the model per node</option><option value="tp">One instance across all nodes (tensor parallel)</option></select>
+      <p class="hint" id="parhint"></p>
+      <label for="wp">Weight precision</label>
+      <select id="wp"><option value="bf16">BF16 (2 bytes per parameter)</option><option value="int8">INT8, e.g. W8A8 (1 byte per parameter)</option></select>
+      <p class="hint">Changes the weights only; the KV cache stays BF16, as on page 1.</p>
     </div>
     <div class="result" aria-live="polite">
       <div class="hint">The host</div>
@@ -171,6 +184,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
         <div class="t"><b>2</b><span>Does it fit its NUMA node?</span><small id="l2s"></small></div>
         <div class="bar" id="bar2"><div class="seg w" id="w2"></div><div class="seg k" id="k2"></div><div class="seg s" id="s2"></div><div class="seg r" id="r2"></div><div class="seg o" id="o2"></div></div>
         <div class="cap" id="cap2"></div>
+        <p class="hint" id="node0hint" style="margin-top:6px"></p>
       </div>
 
       <div class="layer">
@@ -186,12 +200,15 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
 
 <section class="band" style="background:var(--panel)"><div class="wrap">
   <h2>Work backwards: how many users fit?</h2>
-  <p class="lede">Start from the server above and ask the question the other way round. Memory gives one answer, bandwidth gives another, and the smaller one is the real limit.</p>
+  <p class="lede">Start from the server above and ask the question the other way round. Memory gives one answer, bandwidth gives another, and vLLM's sequence cap a third. The smallest one is the real limit.</p>
   <div class="back">
     <div class="panel" style="background:var(--bg)">
       <label for="tgt">Minimum speed each user should see <output id="tgto"></output></label>
       <input type="range" id="tgt" min="2" max="40" step="1" value="10">
       <p class="hint">About 10 tokens per second streams a little faster than most people read.</p>
+      <label for="seqs"><span>vLLM <code>--max-num-seqs</code> per instance</span></label>
+      <select id="seqs"><option>64</option><option selected>128</option><option>256</option><option>512</option></select>
+      <p class="hint">Intel's vLLM guide suggests 128 for online serving and 256 for offline batch jobs.</p>
       <div class="bnums">
         <div><span>Users the memory can hold</span><b id="umem"></b><small id="umems"></small></div>
         <div><span>Users who each get <em id="tgte"></em></span><b id="uspd"></b><small id="uspds"></small></div>
@@ -207,32 +224,36 @@ button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{ou
   <h2>How the pieces connect</h2>
   <p class="lede">Three different questions, each answered by a different knob. Mixing them up is where the confusion comes from.</p>
   <div class="steps">
-    <article><h3>1 · Instance need</h3><p>Weights plus KV cache plus fixed state, from page 1. Only the model, context, users and fill change it. Divide by 0.92 and round up to a catalog class: 32, 48, 64 or 96 GB.</p></article>
-    <article><h3>2 · NUMA node budget</h3><p>Run one vLLM instance per NUMA node, users split between them. vLLM reserves 92% of its node's memory at startup, whatever the instance needs; the OS keeps the rest. The instance must fit inside that 92%.</p></article>
-    <article><h3>3 · Host DIMMs</h3><p>Every memory channel gets one DIMM, because decode speed is set by memory bandwidth. The DIMM count is fixed by the processor (sockets × channels); the DIMM size only buys capacity. MRDIMM raises bandwidth, which raises tokens per second.</p></article>
-    <article><h3>Why bandwidth sets speed</h3><p>Each new token reads all the weights from memory once. So one user can't go faster than bandwidth ÷ weight size. Real speed lands below this ceiling, but it moves with it.</p></article>
+    <article><h3>1 · Instance need</h3><p>Weights plus KV cache plus fixed state, from page 1. Only the model, context, users and fill change it. Divide by 0.92 to get the memory to plan for. The catalog's 32, 48, 64 and 96 GB sizes are starting points set by model size alone; this page sizes for your actual workload and shows the nearest one.</p></article>
+    <article><h3>2 · NUMA node budget</h3><p>Either run one copy of the model per NUMA node with the users split between them, or one tensor-parallel instance that spreads the weights and KV cache across all nodes. vLLM reserves 92% of each node's memory at startup, whatever the instance needs; the OS keeps the rest. What lands on each node must fit inside that 92%.</p></article>
+    <article><h3>3 · Host DIMMs</h3><p>Every memory channel gets a DIMM, because decode speed is set by memory bandwidth. The DIMM count is fixed by the processor (sockets × channels, × 2 at two per channel); the DIMM size only buys capacity. Two per channel buys more capacity but slows DDR5 to 5200. MRDIMM or DDR5-8000 raise bandwidth, which raises tokens per second.</p></article>
+    <article><h3>Why bandwidth sets speed</h3><p>Each new token reads the weights from memory once. So one user can't go faster than bandwidth ÷ weight size. A mixture-of-experts model reads only the experts it uses: one user reads the active parameters, a big batch reads close to all of them. Real speed lands below this ceiling, but it moves with it.</p></article>
   </div>
 </div></section>
 
 
 <section class="band" style="background:var(--panel)"><div class="wrap">
-  <h2>Every Xeon 6 P-core SKU, side by side</h2>
+  <h2>Every Xeon 6 P-core server SKU, side by side</h2>
   <p class="lede" id="chartlede">Each dot is a processor: cores across, the ceiling for one user up. It follows the model, memory type and NUMA setting above. Hover a dot for its numbers; click it to jump to its row in the table.</p>
   <div class="chartbox"><svg id="chart" role="img" aria-label="Scatter of every Xeon 6 P-core SKU: cores against the single-user decode ceiling"></svg><div class="ctip" id="ctip" role="tooltip"></div>
   <div class="clegend"><span class="f69"><i></i>Xeon 6900P · 12 channels</span><span class="f67"><i></i>Xeon 6700P · 8 channels</span><span class="f65"><i></i>Xeon 6500P · 8 channels</span><span>× n = processors with identical numbers (dots side by side share the same values)</span></div></div>
   <div class="tblwrap"><table class="sk" id="sktable"><thead><tr><th>Processor (Intel ARK ↗)</th><th>Family</th><th>Cores</th><th>TDP</th><th>Channels</th><th>Memory</th><th>Sockets</th><th>Peak GB/s per socket</th><th>Ceiling, 1 user</th><th></th></tr></thead><tbody id="skbody"></tbody></table></div>
-  <p class="hint" style="margin-top:8px">Every processor value comes from its Intel ARK page; click a name to check it. Peak bandwidth and the ceiling are calculated from those values.</p>
+  <p class="hint" style="margin-top:8px">Every processor value comes from its Intel ARK page; click a name to check it. One exception: for Xeon 6700P, ARK's "Memory Types" field reads MRDIMM 8800, but the same page's "Maximum Memory Speed" reads 8000 MT/s. Intel's memory support article and Supermicro's SKU table both give 8000 for 6700P/6500P, so this page uses 8000. Peak bandwidth and the ceiling are calculated from those values.</p>
 </div></section>
 
 <section class="band"><div class="wrap">
   <h2>Where the numbers come from</h2>
   <ul class="src">
-    <li>Every processor figure (cores, TDP, memory types and speeds, memory channels per socket, and how many sockets it supports) comes from that SKU's specifications page on <a href="https://www.intel.com/content/www/us/en/ark/products/series/240357/intel-xeon-6-processors.html">Intel ARK</a>, checked on 27 November 2026. Each card above links to its page. Only P-core SKUs are listed, because AMX, the matrix engine vLLM uses for BF16, is on P-cores.</li>
-    <li>The 92% reservation per NUMA node: Intel Inference Microservices, <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/configuration/environment-variables">Environment variables</a>. Memory classes: <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/models-and-hardware/supported-intel-platforms">Supported Intel platforms</a>.</li>
-    <li>Peak bandwidth per socket = channels × 8 bytes × transfer rate. It's the theoretical peak; measured bandwidth is lower.</li>
+    <li>Every processor figure (cores, TDP, memory types and speeds, memory channels per socket, and how many sockets it supports) comes from that SKU's specifications page on <a href="https://www.intel.com/content/www/us/en/ark/products/series/240357/intel-xeon-6-processors.html">Intel ARK</a>, checked on 28 November 2026, and was cross-checked against <a href="https://www.supermicro.com/en/support/resources/cpu-intel-xeon-6">Supermicro's Xeon 6 SKU table</a>. Each row in the table links to its ARK page. Only P-core server SKUs are listed, because AMX, the matrix engine vLLM uses for BF16, is on P-cores; the -B SoC parts and the Xeon 6300 entry series are left out.</li>
+    <li>MRDIMM speed: Intel's <a href="https://www.intel.com/content/www/us/en/support/articles/000098737.html">MRDIMM support article</a> gives up to 8800 MT/s on Xeon 6900P and 8000 MT/s on Xeon 6500P/6700P. DDR5-8000 RDIMM: Intel is enabling it at one DIMM per channel on select Xeon 6700P SKUs through a platform and BIOS update (<a href="https://newsroom.intel.com/opinion/memory-bandwidth-may-be-most-overlooked-ai-performance-metric">Intel newsroom, July 2026</a>, measured on 2 × Xeon 6787P with 16 × 64 GB). Ask the server maker which SKUs and boards qualify. Two DIMMs per channel run DDR5 at 5200 MT/s on Xeon 6700P/6500P (<a href="https://kingston.com/memory/server-memory/birch-stream">Kingston, Birch Stream memory</a>).</li>
+    <li>The 92% reservation per NUMA node: Intel Inference Microservices, <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/configuration/environment-variables">Environment variables</a> (<code>gpu-memory-utilization</code>, default 0.92). Its startup error checks the memory <em>available</em> on the node, so the OS, other processes and the page cache count against it. Memory sizes 32/48/64/96 GB: <a href="https://swcatalog.intel.com/developer/docs/intel-inference-microservices/models-and-hardware/supported-intel-platforms">Supported Intel platforms</a>, where they are starting points by model size (2–9B, 10–16B, 17–24B, 25–30B including mixture-of-experts), not workload classes.</li>
+    <li>Peak bandwidth per socket = channels × 8 bytes × transfer rate. It's the theoretical peak; the "bandwidth you actually get" slider scales it. For scale, heise measured 1.21 TB/s with a STREAM-triad-like pattern on 2 × Xeon 6980P with MRDIMM-8800, about 72% of the 1.69 TB/s peak (<a href="https://heise.de/-9951785">heise</a>). Intel quotes DDR5-8000 as 25% faster per transfer but up to 20% more measured bandwidth than DDR5-6400.</li>
+    <li>Sub-NUMA modes follow the compute dies, since each die carries its own memory controllers: Xeon 6900P has three dies and offers SNC3 (the default) or HEX, one node per socket (<a href="https://phoronix.com/review/xeon-6980p-snc3-hex">Phoronix</a>). Xeon 6700P/6500P use either two dies (such as the 86-core parts) or one (<a href="https://www.theregister.com/2025/02/24/intel_xeon_6/">The Register</a>), so SNC2 exists only on two-die parts. The selector offers only the modes that split the channels evenly; check your server with <code>numactl -H</code>.</li>
+    <li>DIMM sizes are binary (a "64 GB" DIMM is 64 GiB, about 68.7 GB), while the model and KV cache figures are decimal GB. The page counts DIMMs at their label, which leaves about 7% unclaimed and errs on the safe side.</li>
     <li>Why bandwidth sets speed: Intel describes LLM inference on Xeon as "a memory-bound workload", with memory reads as the largest hot spot (<a href="https://www.intel.com/content/www/us/en/developer/articles/technical/boost-language-models-with-pytorch-on-xeon.html">Boost LLMs with PyTorch on Intel Xeon</a>). The ceiling on this page (bandwidth ÷ weight size, one user) is the arithmetic that follows from that: each new token reads every weight once.</li>
     <li>For scale, Intel's own measurement: two Xeon 6980P with 24 × 96 GB MRDIMM-8800 served Llama 3.1 8B at 1,139.51 tokens per second in MLPerf Inference v6.1, Server scenario, CPU only (<a href="https://www.intel.com/content/www/us/en/newsroom/news/data-center/intel-software-optimizations-boost-ai-inference-in-mlperf-v6-1.html">Intel newsroom, September 2026</a>). That is total throughput across all users, not one user's speed. For a measured figure on a specific SKU and model, use Intel's <a href="https://xeonprocessoradvisor.intel.com/on-prem-ai-performance-advisor">On-prem AI Performance Advisor</a>.</li>
-    <li>One vLLM instance per NUMA node follows Intel's <a href="https://intel.github.io/optimization-zone/software/vllm/">vLLM on Xeon guide</a>, which keeps each model copy on local memory. Which sub-NUMA modes a server offers depends on the processor and the BIOS; the selector here is for exploring, not a statement of what each SKU supports.</li>
+    <li>Two ways to use the nodes. Intel's <a href="https://intel.github.io/optimization-zone/software/vllm/">vLLM on Xeon guide</a> sets <code>--tensor-parallel-size</code> to the NUMA node count, so one instance keeps a shard of the model on each node's local memory; that is the "one instance across all nodes" option, and it adds up every node's bandwidth for each user, minus the cost of communication between nodes. Running one copy per node instead (data parallel) keeps every node independent and loses nothing to communication, but each user only gets one node's bandwidth. Tensor parallel needs the attention heads to split evenly across the nodes. The guide also suggests <code>--max-num-seqs</code> 128 online and 256 offline.</li>
+    <li>Mixture-of-experts reads: the page splits the weights into a shared part and an expert part from the total and active parameter counts, and counts the experts a batch of <i>b</i> users touches as 1 − (1 − k/E)<sup><i>b</i></sup> of them (Qwen3-30B-A3B: 8 of 128 experts per token). It assumes experts are picked independently, which is a planning estimate.</li>
     <li>Model numbers and the KV cache formula are the same as on <a href="./" id="srcp1">page 1</a>. All figures are planning estimates: measure with real prompts before setting limits.</li>
   </ul>
 </div></section>
@@ -248,33 +269,37 @@ const M=[
  {n:"Mistral-7B Instruct v0.3",L:32,H:8,d:128,B:7.25,max:32768},
  {n:"Qwen3-8B",L:36,H:8,d:128,B:8.19,max:40960},
  {n:"Phi-4-reasoning",L:40,H:10,d:128,B:14.7,max:32768},
- {n:"Qwen3-30B-A3B (mixture-of-experts)",L:48,H:4,d:128,B:30.5,max:40960,moe:3.3},
+ {n:"Qwen3-30B-A3B (mixture-of-experts)",L:48,H:4,d:128,B:30.5,max:40960,moe:3.3,E:128,k:8},
  {n:"Qwen3.5-4B (hybrid attention)",L:32,kvL:8,H:4,d:256,B:5.0,st:53,max:262144},
  {n:"Llama 3.1 8B Instruct",L:32,H:8,d:128,B:8.03,max:131072}
 ];
-/* Every SKU field below was read from that SKU's Intel ARK specifications page on 27 Nov 2026:
-   Total Cores, TDP, Memory Types (DDR5 / MRDIMM speed), Max # of Memory Channels, Scalability (1S, 2S, 4S_8S). */
+/* Every SKU field below was read from that SKU's Intel ARK specifications page (27-28 Nov 2026) and cross-checked
+   against Supermicro's Xeon 6 SKU table: Total Cores, TDP, Max # of Memory Channels, Scalability (1S, 2S, 4S_8S),
+   and MRDIMM support. MRDIMM speed: 8800 on 6900P, 8000 on 6700P (ARK "Maximum Memory Speed", Intel support
+   article 000098737, Supermicro); 0 = DDR5 only. */
 const F={
  "6900P":{label:"Xeon 6900P · 12 channels"},
  "6700P":{label:"Xeon 6700P · 8 channels"},
  "6500P":{label:"Xeon 6500P · 8 channels"}
 };
+/* NUMA nodes per socket each family can offer: one node per compute die, or all dies as one node */
+const NPS={"6900P":[1,3],"6700P":[1,2],"6500P":[1]},NPD={"6900P":3,"6700P":1,"6500P":1};
 const SC={"1S":[1],"2S":[1,2],"4S_8S":[4,8]};
 const CPU=[
- ["6980P","6900P",128,500,12,8800,"2S"],["6979P","6900P",120,500,12,8800,"2S"],["6972P","6900P",96,500,12,8800,"2S"],["6952P","6900P",96,400,12,8800,"2S"],["6962P","6900P",72,500,12,8800,"2S"],["6960P","6900P",72,500,12,8800,"2S"],["6944P","6900P",72,350,12,0,"2S"],
- ["6787P","6700P",86,350,8,8800,"2S"],["6788P","6700P",86,350,8,0,"4S_8S"],["6781P","6700P",80,350,8,8800,"1S"],["6776P","6700P",64,350,8,8800,"2S"],["6774P","6700P",64,350,8,8800,"1S"],["6767P","6700P",64,350,8,8800,"2S"],["6768P","6700P",64,330,8,0,"4S_8S"],["6761P","6700P",64,350,8,8800,"1S"],["6760P","6700P",64,330,8,0,"2S"],["6747P","6700P",48,330,8,8800,"2S"],["6748P","6700P",48,300,8,0,"4S_8S"],["6741P","6700P",48,300,8,0,"1S"],["6740P","6700P",48,270,8,0,"2S"],["6736P","6700P",36,205,8,0,"2S"],["6745P","6700P",32,300,8,0,"2S"],["6738P","6700P",32,270,8,0,"4S_8S"],["6737P","6700P",32,270,8,0,"2S"],["6732P","6700P",32,350,8,0,"2S"],["6731P","6700P",32,245,8,0,"1S"],["6730P","6700P",32,250,8,0,"2S"],
- ["6530P","6500P",32,225,8,0,"2S"],["6527P","6500P",24,255,8,0,"2S"],["6521P","6500P",24,225,8,0,"1S"],["6520P","6500P",24,210,8,0,"2S"],["6517P","6500P",16,190,8,0,"2S"],["6515P","6500P",16,150,8,0,"2S"],["6511P","6500P",16,150,8,0,"1S"]
+ ["6980P","6900P",128,500,12,8800,"2S"],["6979P","6900P",120,500,12,8800,"2S"],["6978P","6900P",120,500,12,8800,"2S"],["6972P","6900P",96,500,12,8800,"2S"],["6952P","6900P",96,400,12,8800,"2S"],["6962P","6900P",72,500,12,8800,"2S"],["6960P","6900P",72,500,12,8800,"2S"],["6944P","6900P",72,350,12,0,"2S"],
+ ["6787P","6700P",86,350,8,8000,"2S"],["6788P","6700P",86,350,8,0,"4S_8S"],["6781P","6700P",80,350,8,8000,"1S"],["6776P","6700P",64,350,8,8000,"2S"],["6774P","6700P",64,350,8,8000,"1S"],["6767P","6700P",64,350,8,8000,"2S"],["6768P","6700P",64,330,8,0,"4S_8S"],["6761P","6700P",64,350,8,8000,"1S"],["6760P","6700P",64,330,8,0,"2S"],["6747P","6700P",48,330,8,8000,"2S"],["6748P","6700P",48,300,8,0,"4S_8S"],["6741P","6700P",48,300,8,0,"1S"],["6740P","6700P",48,270,8,0,"2S"],["6736P","6700P",36,205,8,0,"2S"],["6745P","6700P",32,300,8,0,"2S"],["6738P","6700P",32,270,8,0,"4S_8S"],["6737P","6700P",32,270,8,0,"2S"],["6732P","6700P",32,350,8,0,"2S"],["6731P","6700P",32,245,8,0,"1S"],["6730P","6700P",32,250,8,0,"2S"],["6728P","6700P",24,210,8,0,"4S_8S"],["6725P","6700P",16,235,8,0,"2S"],["6724P","6700P",16,210,8,0,"4S_8S"],["6714P","6700P",8,165,8,0,"4S_8S"],
+ ["6530P","6500P",32,225,8,0,"2S"],["6527P","6500P",24,255,8,0,"2S"],["6521P","6500P",24,225,8,0,"1S"],["6520P","6500P",24,210,8,0,"2S"],["6517P","6500P",16,190,8,0,"2S"],["6515P","6500P",16,150,8,0,"2S"],["6511P","6500P",16,150,8,0,"1S"],["6505P","6500P",12,150,8,0,"2S"],["6503P","6500P",8,135,8,0,"2S"],["6507P","6500P",8,150,8,0,"2S"]
 ].map(([n,f,c,w,ch,mr,sc])=>({n,f,c,w,ch,mr,sc,sk:SC[sc]}));
 const scTxt={"1S":"1 socket only","2S":"1 or 2 sockets","4S_8S":"4 or 8 sockets"};
 /* Product pages from Intel's Xeon 6 series list on ARK (intel.com/content/www/us/en/ark/products/series/240357) */
-const ARK={"6980P": "240777/intel-xeon-6980p-processor-504m-cache-2-00-ghz", "6979P": "240781/intel-xeon-6979p-processor-504m-cache-2-10-ghz", "6972P": "240785/intel-xeon-6972p-processor-480m-cache-2-40-ghz", "6952P": "241643/intel-xeon-6952p-processor-480m-cache-2-10-ghz", "6962P": "244339/intel-xeon-6962p-processor-432m-cache-2-70-ghz", "6960P": "240775/intel-xeon-6960p-processor-432m-cache-2-70-ghz", "6944P": "242856/intel-xeon-6944p-processor-432m-cache-1-80-ghz", "6787P": "241844/intel-xeon-6787p-processor-336m-cache-2-00-ghz", "6788P": "241837/intel-xeon-6788p-processor-336m-cache-2-00-ghz", "6781P": "241834/intel-xeon-6781p-processor-336m-cache-2-00-ghz", "6776P": "243691/intel-xeon-6776p-processor-336m-cache-2-30-ghz", "6774P": "243692/intel-xeon-6774p-processor-336m-cache-2-50-ghz", "6767P": "241845/intel-xeon-6767p-processor-336m-cache-2-40-ghz", "6768P": "241840/intel-xeon-6768p-processor-336m-cache-2-40-ghz", "6761P": "241842/intel-xeon-6761p-processor-336m-cache-2-50-ghz", "6760P": "241836/intel-xeon-6760p-processor-320m-cache-2-20-ghz", "6747P": "241825/intel-xeon-6747p-processor-288m-cache-2-70-ghz", "6748P": "242637/intel-xeon-6748p-processor-192m-cache-2-50-ghz", "6741P": "241828/intel-xeon-6741p-processor-288m-cache-2-50-ghz", "6740P": "241838/intel-xeon-6740p-processor-288m-cache-2-10-ghz", "6736P": "242638/intel-xeon-6736p-processor-144m-cache-2-00-ghz", "6745P": "243112/intel-xeon-6745p-processor-336m-cache-3-10-ghz", "6738P": "242632/intel-xeon-6738p-processor-144m-cache-2-90-ghz", "6737P": "242628/intel-xeon-6737p-processor-144m-cache-2-90-ghz", "6732P": "242641/intel-xeon-6732p-processor-144m-cache-3-80-ghz", "6731P": "242635/intel-xeon-6731p-processor-144m-cache-2-50-ghz", "6730P": "241830/intel-xeon-6730p-processor-288m-cache-2-50-ghz", "6530P": "242636/intel-xeon-6530p-processor-144m-cache-2-30-ghz", "6527P": "242642/intel-xeon-6527p-processor-144m-cache-3-00-ghz", "6521P": "242634/intel-xeon-6521p-processor-144m-cache-2-60-ghz", "6520P": "242640/intel-xeon-6520p-processor-144m-cache-2-40-ghz", "6517P": "242665/intel-xeon-6517p-processor-72m-cache-3-20-ghz", "6515P": "242669/intel-xeon-6515p-processor-72m-cache-2-30-ghz", "6511P": "242666/intel-xeon-6511p-processor-72m-cache-2-30-ghz"};
+const ARK={"6980P": "240777/intel-xeon-6980p-processor-504m-cache-2-00-ghz", "6979P": "240781/intel-xeon-6979p-processor-504m-cache-2-10-ghz", "6978P": "244340/intel-xeon-6978p-processor-504m-cache-2-10-ghz", "6972P": "240785/intel-xeon-6972p-processor-480m-cache-2-40-ghz", "6952P": "241643/intel-xeon-6952p-processor-480m-cache-2-10-ghz", "6962P": "244339/intel-xeon-6962p-processor-432m-cache-2-70-ghz", "6960P": "240775/intel-xeon-6960p-processor-432m-cache-2-70-ghz", "6944P": "242856/intel-xeon-6944p-processor-432m-cache-1-80-ghz", "6787P": "241844/intel-xeon-6787p-processor-336m-cache-2-00-ghz", "6788P": "241837/intel-xeon-6788p-processor-336m-cache-2-00-ghz", "6781P": "241834/intel-xeon-6781p-processor-336m-cache-2-00-ghz", "6776P": "243691/intel-xeon-6776p-processor-336m-cache-2-30-ghz", "6774P": "243692/intel-xeon-6774p-processor-336m-cache-2-50-ghz", "6767P": "241845/intel-xeon-6767p-processor-336m-cache-2-40-ghz", "6768P": "241840/intel-xeon-6768p-processor-336m-cache-2-40-ghz", "6761P": "241842/intel-xeon-6761p-processor-336m-cache-2-50-ghz", "6760P": "241836/intel-xeon-6760p-processor-320m-cache-2-20-ghz", "6747P": "241825/intel-xeon-6747p-processor-288m-cache-2-70-ghz", "6748P": "242637/intel-xeon-6748p-processor-192m-cache-2-50-ghz", "6741P": "241828/intel-xeon-6741p-processor-288m-cache-2-50-ghz", "6740P": "241838/intel-xeon-6740p-processor-288m-cache-2-10-ghz", "6736P": "242638/intel-xeon-6736p-processor-144m-cache-2-00-ghz", "6745P": "243112/intel-xeon-6745p-processor-336m-cache-3-10-ghz", "6738P": "242632/intel-xeon-6738p-processor-144m-cache-2-90-ghz", "6737P": "242628/intel-xeon-6737p-processor-144m-cache-2-90-ghz", "6732P": "242641/intel-xeon-6732p-processor-144m-cache-3-80-ghz", "6731P": "242635/intel-xeon-6731p-processor-144m-cache-2-50-ghz", "6730P": "241830/intel-xeon-6730p-processor-288m-cache-2-50-ghz", "6728P": "242643/intel-xeon-6728p-processor-144m-cache-2-70-ghz", "6725P": "245097/intel-xeon-6725p-processor-192m-cache-3-70-ghz", "6724P": "242670/intel-xeon-6724p-processor-72m-cache-3-60-ghz", "6714P": "242671/intel-xeon-6714p-processor-48m-cache-4-00-ghz", "6530P": "242636/intel-xeon-6530p-processor-144m-cache-2-30-ghz", "6527P": "242642/intel-xeon-6527p-processor-144m-cache-3-00-ghz", "6521P": "242634/intel-xeon-6521p-processor-144m-cache-2-60-ghz", "6520P": "242640/intel-xeon-6520p-processor-144m-cache-2-40-ghz", "6517P": "242665/intel-xeon-6517p-processor-72m-cache-3-20-ghz", "6515P": "242669/intel-xeon-6515p-processor-72m-cache-2-30-ghz", "6511P": "242666/intel-xeon-6511p-processor-72m-cache-2-30-ghz", "6505P": "242667/intel-xeon-6505p-processor-48m-cache-2-20-ghz", "6503P": "246088/intel-xeon-6503p-processor-48m-cache-2-80-ghz", "6507P": "242668/intel-xeon-6507p-processor-48m-cache-3-50-ghz"};
 const ark=n=>`https://www.intel.com/content/www/us/en/products/sku/${ARK[n]}/specifications.html`;
-const memtxt=c=>c.mr?`DDR5-6400 or MRDIMM-${c.mr}`:"DDR5-6400 only";
-const CLASSES=[32,48,64,96],RES=0.92,DDR=6400;
+const CLASSES=[32,48,64,96],RES=0.92;
 const $=id=>document.getElementById(id);
 const fmt=(x,dp=1)=>x.toLocaleString("en-GB",{minimumFractionDigits:dp,maximumFractionDigits:dp});
+const ft=x=>fmt(x,x<20?1:0);
 const fk=t=>t>=1024?(t/1024)+"K":String(t);
-const st={m:7,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:64,me:"ddr",custom:null};
+const st={m:7,c:3,u:40,f:100,cpu:"6787P",so:2,np:1,dm:64,me:"ddr",dpc:1,eff:75,par:"dp",wp:"bf16",seqs:128,custom:null};
 /* read the workload from page 1's link, if any */
 const q=new URLSearchParams(location.search);
 if(q.has("m")){const m=+q.get("m");if(m>=0&&m<M.length)st.m=m;else if(m===-1){const c={n:"Custom (from page 1)"};for(const k of["L","kvL","H","d","B","st"])c[k]=parseFloat(q.get(k))||0;if(c.L&&c.H&&c.d&&c.B){c.kvL=c.kvL||c.L;c.max=262144;st.custom=c;st.m=-1;}}}
@@ -282,24 +307,57 @@ for(const[k,lo,hi] of[["c",0,8],["u",1,256],["f",10,100]])if(q.has(k)){const v=+
 $("model").innerHTML=M.map((m,i)=>`<option value="${i}">${m.n}</option>`).join("")+(st.custom?`<option value="-1">${st.custom.n}</option>`:"");
 $("cpu").innerHTML=Object.keys(F).map(f=>`<optgroup label="${F[f].label}">`+CPU.filter(c=>c.f===f).map(c=>`<option value="${c.n}">Xeon ${c.n} · ${c.c} cores${c.sc!=="2S"?" · "+c.sc.replace("_","/"):""}</option>`).join("")+`</optgroup>`).join("");
 const model=()=>st.m===-1?st.custom:M[st.m];
+const cur=()=>CPU.find(x=>x.n===st.cpu);
+const sockOf=(c,so)=>c.sk.includes(so)?so:(c.sk.includes(2)?2:c.sk[0]);
+const npOf=(c,np)=>NPS[c.f].includes(np)?np:NPD[c.f];
+/* memory speed for a SKU under the chosen type and DIMMs per channel */
+function memOf(c,me,dpc){
+ const d=c.f!=="6900P"&&dpc===2?2:1;
+ if(d===2)return{d,mt:5200,kind:"ddr",lab:"DDR5-5200, 2 per channel"};
+ if(me==="mr"&&c.mr)return{d,mt:c.mr,kind:"mr",lab:"MRDIMM-"+c.mr};
+ if(me==="d8"&&c.f==="6700P")return{d,mt:8000,kind:"d8",lab:"DDR5-8000"};
+ return{d,mt:6400,kind:"ddr",lab:"DDR5-6400"};
+}
+function serverFor(c){
+ const so=sockOf(c,st.so),np=npOf(c,st.np),nodes=so*np,mm=memOf(c,st.me,st.dpc),chn=c.ch/np;
+ const bwS=c.ch*8*mm.mt/1000,bwN=chn*8*mm.mt/1000,bwE=bwN*st.eff/100;
+ return{so,np,nodes,mm,chn,bwS,bwN,bwE,bwT:bwE*nodes};
+}
+/* GB of weights one decode step reads for a batch of b sequences.
+   Dense: all of them. Mixture-of-experts: the shared part plus the experts the batch touches. */
+function rdFn(m,bpp){
+ if(!m.moe)return()=>m.B*bpp;
+ const fr=m.k/m.E,ex=(m.B-m.moe)/(1-fr),sh=m.B-ex;
+ return b=>(sh+ex*(1-Math.pow(1-fr,Math.max(1,b))))*bpp;
+}
+function norm(){
+ const c=cur();
+ st.so=sockOf(c,st.so);st.np=npOf(c,st.np);
+ if(c.f==="6900P")st.dpc=1;
+ if(st.dpc===2)st.me="ddr";
+ if(st.me==="mr"&&!c.mr)st.me="ddr";
+ if(st.me==="d8"&&c.f!=="6700P")st.me="ddr";
+}
 function calc(){
- const m=model(),c=CPU.find(x=>x.n===st.cpu);
- const so=c.sk.includes(st.so)?st.so:(c.sk.includes(2)?2:c.sk[0]),nodes=so*st.np,inst=nodes,up=Math.ceil(st.u/inst);
+ const m=model(),c=cur(),s=serverFor(c),tp=st.par==="tp";
+ const bpp=st.wp==="int8"?1:2,rd=rdFn(m,bpp);
+ const inst=tp?1:s.nodes,up=Math.ceil(st.u/inst);
  const kvL=m.kvL||m.L,kvTok=2*kvL*m.H*m.d*2,ctx=CTX[st.c];
- const w=m.B*2,kv=up*ctx*st.f/100*kvTok/1e9,sg=up*(m.st||0)/1000,need=w+kv+sg,hr=need/RES;
+ const w=m.B*bpp,kv=up*ctx*st.f/100*kvTok/1e9,sg=up*(m.st||0)/1000,need=w+kv+sg,hr=need/RES;
+ const sh=tp?1/s.nodes:1,share=need*sh,hrN=share/RES;
  const cls=CLASSES.find(k=>hr<=k);
- const mr=st.me==="mr"&&c.mr>0,mt=mr?c.mr:DDR,dimms=so*c.ch,host=dimms*st.dm,node=host/nodes,res=node*RES;
- const chn=c.ch/st.np,bwS=c.ch*8*mt/1000,bwN=chn*8*mt/1000,ceil=bwN/w;
- return{m,c,so,nodes,inst,up,kvTok,ctx,w,kv,sg,need,hr,cls,mr,mt,dimms,host,node,res,chn,bwS,bwN,ceil,fits:hr<=node};
+ const dimms=s.so*c.ch*s.mm.d,host=dimms*st.dm,node=host/s.nodes,res=node*RES;
+ const ceil=(tp?s.bwT:s.bwE)/rd(1);
+ return{m,c,...s,tp,bpp,rd,inst,up,kvTok,ctx,w,kv,sg,need,hr,sh,share,hrN,cls,dimms,host,node,res,ceil,fits:hrN<=node};
 }
 const FC={"6900P":"f69","6700P":"f67","6500P":"f65"};
-function skuNums(c,r){const mr=st.me==="mr"&&c.mr>0,mt=mr?c.mr:DDR,bwS=c.ch*8*mt/1000,bwN=bwS/st.np;return{mr,mt,bwS,bwN,ceil:bwN/r.w};}
+function skuNums(c,r){const s=serverFor(c);return{...s,mr:s.mm.kind!=="ddr",mt:s.mm.mt,ceil:(r.tp?s.bwT:s.bwE)/r.rd(1)};}
 function drawTable(r){
  let h="";
  for(const f of Object.keys(F)){
   h+=`<tr class="fam"><td colspan="10">${F[f].label}</td></tr>`;
   for(const c of CPU.filter(x=>x.f===f)){const k=skuNums(c,r);
-   h+=`<tr id="row-${c.n}" class="${FC[c.f]}${c.n===st.cpu?" cur":""}"><td><span class="dot"></span><a href="${ark(c.n)}" target="_blank" rel="noopener" title="Open Xeon ${c.n} on Intel ARK">Xeon ${c.n} ↗</a></td><td>${c.f}</td><td>${c.c}</td><td>${c.w} W</td><td>${c.ch}</td><td>${c.mr?"DDR5-6400 · MRDIMM-"+c.mr:"DDR5-6400"}</td><td>${c.sc.replace("_","/")}</td><td>${fmt(k.bwS,0)}${k.mr?" (MRDIMM)":""}</td><td>${fmt(k.ceil,0)} tok/s</td><td><button type="button" data-use="${c.n}">Use</button></td></tr>`;}
+   h+=`<tr id="row-${c.n}" class="${FC[c.f]}${c.n===st.cpu?" cur":""}"><td><span class="dot"></span><a href="${ark(c.n)}" target="_blank" rel="noopener" title="Open Xeon ${c.n} on Intel ARK">Xeon ${c.n} ↗</a></td><td>${c.f}</td><td>${c.c}</td><td>${c.w} W</td><td>${c.ch}</td><td>${c.mr?"DDR5-6400 · MRDIMM-"+c.mr:"DDR5-6400"}</td><td>${c.sc.replace("_","/")}</td><td>${fmt(k.bwS,0)}${k.mr?" ("+k.mm.lab+")":""}</td><td>${ft(k.ceil)} tok/s</td><td><button type="button" data-use="${c.n}">Use</button></td></tr>`;}
  }
  $("skbody").innerHTML=h;
 }
@@ -308,7 +366,7 @@ function drawChart(r){
  const pts=CPU.map(c=>({c,k:skuNums(c,r)}));
  const ymax=Math.max(...pts.map(p=>p.k.ceil))*1.18,xmax=140;
  const X=v=>pl+v/xmax*(W-pl-pr),Y=v=>H-pb-v/ymax*(H-pt-pb);
- const step=ymax>80?20:ymax>40?10:5;
+ const step=ymax>400?100:ymax>160?40:ymax>80?20:ymax>40?10:5;
  let g=`<g class="grid">`;for(let v=0;v<=ymax;v+=step)g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${pl-8}" y="${Y(v)+4}" text-anchor="end">${v}</text>`;
  for(let v=0;v<=xmax;v+=20)g+=`<text class="ax" x="${X(v)}" y="${H-pb+18}" text-anchor="middle">${v}</text>`;
  g+=`</g><text class="axt" x="${(pl+W-pr)/2}" y="${H-6}" text-anchor="middle">Cores per processor</text><text class="axt" x="${pl-40}" y="${pt-4}">Ceiling for one user, tok/s</text>`;
@@ -319,81 +377,116 @@ function drawChart(r){
  const spot=new Map();
  for(const gr of groups.values()){const k=gr.x+"|"+gr.y.toFixed(2);const n=spot.get(k)||0;gr.dx=n*11;spot.set(k,n+1);}
  let d="",last={};
- for(const gr of groups.values()){const cx=X(gr.x)+gr.dx,cy=Y(gr.y),cur=gr.list.some(p=>p.c.n===st.cpu);
-  d+=`<g class="pt ${FC[gr.f]}${cur?" cur":""}" tabindex="0" role="button" data-names="${gr.list.map(p=>p.c.n).join(",")}" aria-label="${gr.list.map(p=>"Xeon "+p.c.n).join(", ")}: ${gr.x} cores, ${fmt(gr.y,0)} tokens per second"><circle cx="${cx}" cy="${cy}" r="14" fill="transparent"/><circle class="m" cx="${cx}" cy="${cy}" r="6.5"/>${gr.list.length>1&&W>=560?`<text class="cnt" x="${cx+9}" y="${cy-7}">×${gr.list.length}</text>`:""}</g>`;
+ for(const gr of groups.values()){const cx=X(gr.x)+gr.dx,cy=Y(gr.y),on=gr.list.some(p=>p.c.n===st.cpu);
+  d+=`<g class="pt ${FC[gr.f]}${on?" cur":""}" tabindex="0" role="button" data-names="${gr.list.map(p=>p.c.n).join(",")}" aria-label="${gr.list.map(p=>"Xeon "+p.c.n).join(", ")}: ${gr.x} cores, ${fmt(gr.y,0)} tokens per second"><circle cx="${cx}" cy="${cy}" r="14" fill="transparent"/><circle class="m" cx="${cx}" cy="${cy}" r="6.5"/>${gr.list.length>1&&W>=560?`<text class="cnt" x="${cx+9}" y="${cy-7}">×${gr.list.length}</text>`:""}</g>`;
   const lead=gr.f==="6500P"?(!last[gr.f]||gr.x<last[gr.f].x):(!last[gr.f]||gr.x>last[gr.f].x);if(lead)last[gr.f]={x:gr.x,cx,y:cy};}
  for(const f of Object.keys(last))d+=`<text class="lbl" x="${f==="6500P"?last[f].cx-8:last[f].cx+14}" y="${last[f].y+(f==="6500P"?24:4)}" text-anchor="start">${f}</text>`;
  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("height",H);svg.innerHTML=g+d;
- const m=model();$("chartlede").textContent=`Each dot is a processor: cores across, the ceiling for one user up, for ${m.n} with ${st.me==="mr"?"MRDIMM where the processor supports it, DDR5 otherwise":"DDR5-6400"} and ${st.np} NUMA node${st.np>1?"s":""} per socket. Hover a dot for its numbers; click it to jump to its row in the table.`;
+ const m=model(),mt={ddr:"DDR5-6400",d8:"DDR5-8000 where the processor supports it (6700P), DDR5-6400 otherwise",mr:"MRDIMM where the processor supports it, DDR5-6400 otherwise"}[st.me];
+ $("chartlede").textContent=`Each dot is a processor: cores across, the ceiling for one user up, for ${m.n} at ${st.wp==="int8"?"INT8":"BF16"} with ${st.dpc===2?"two DDR5-5200 DIMMs per channel on 6700P/6500P":mt}, ${st.eff}% of peak bandwidth, ${st.par==="tp"?"one tensor-parallel instance across all NUMA nodes":"one copy per NUMA node"} and each family's NUMA setting closest to the one above. Hover a dot for its numbers; click it to jump to its row in the table.`;
 }
+/* largest whole number n with f(n) >= T (f falls as n grows); 0 if even n = 1 misses */
+function maxN(f,T){if(f(1)<T)return 0;let lo=1,hi=2;while(f(hi)>=T&&hi<1e7){lo=hi;hi*=2;}while(hi-lo>1){const mid=(lo+hi)>>1;if(f(mid)>=T)lo=mid;else hi=mid;}return lo;}
 function backCalc(r){
  const kvU=CTX[st.c]*st.f/100*r.kvTok/1e9+(r.m.st||0)/1000;  /* GB per user */
- const room=r.node*RES-r.w;                                     /* KV room per node */
- const memN=Math.max(0,Math.floor(room/kvU)),mem=memN*r.nodes;
- const T=+$("tgt").value,spdN=Math.max(0,Math.floor((r.bwN/T-r.w)/kvU)),spd=spdN*r.nodes;
- const per=U=>r.bwN/(r.w+(U/r.nodes)*kvU);                     /* tok/s each user sees with U users in total */
- return{kvU,room,memN,mem,T,spdN,spd,per};
+ const T=+$("tgt").value,cap=st.seqs*r.inst;
+ let room,memN=null,mem,spdN=null,spd,per;
+ if(!r.tp){
+  room=r.res-r.w;                                              /* KV room per node */
+  memN=Math.max(0,Math.floor(room/kvU));mem=memN*r.nodes;
+  const pn=n=>r.bwE/(r.rd(n)+n*kvU);                           /* tok/s with n users on one node */
+  spdN=maxN(pn,T);spd=spdN*r.nodes;per=U=>pn(U/r.nodes);
+ }else{
+  room=r.res-r.w/r.nodes;                                      /* each node holds 1/N of weights and KV */
+  mem=Math.max(0,Math.floor(room/(kvU/r.nodes)));
+  per=U=>r.bwT/(r.rd(U)+U*kvU);
+  spd=maxN(per,T);
+ }
+ return{kvU,room,memN,mem,T,spdN,spd,per,cap};
 }
 function drawBack(r){
- const b=backCalc(r),T=b.T,m=r.m;
+ const b=backCalc(r),T=b.T,m=r.m,N=r.nodes,ns=N>1?"s":"";
  $("tgto").textContent=T+" tok/s";$("tgte").textContent="≥ "+T+" tok/s";
- $("umem").textContent=b.mem.toLocaleString("en-GB");$("umems").textContent=`${b.memN.toLocaleString("en-GB")} per node × ${r.nodes} node${r.nodes>1?"s":""}`;
- $("uspd").textContent=b.spd.toLocaleString("en-GB");$("uspds").textContent=b.spd?`${b.spdN} per node × ${r.nodes}`:`even one user can't reach ${T} tok/s`;
- const v=$("bverdict"),lim=Math.min(b.mem,b.spd);
- if(b.spd===0){v.style.color="var(--red)";v.textContent=`This server can't give even one user ${T} tokens per second with ${m.n}. More channels or MRDIMM, or a smaller model.`;}
- else if(b.spd<=b.mem){const used=(r.w+b.spdN*b.kvU)/(r.node*RES)*100;v.style.color="var(--ink)";v.textContent=`Bandwidth is the limit: about ${b.spd.toLocaleString("en-GB")} users. At that load each instance uses ${fmt(used,0)}% of what vLLM reserves; the memory could hold ${fmt(b.mem/Math.max(1,b.spd),0)}× more users than the bandwidth can serve.`;}
- else{v.style.color="var(--ink)";v.textContent=`Memory is the limit: about ${b.mem.toLocaleString("en-GB")} users. Bigger DIMMs, shorter context or fewer users per instance would raise it.`;}
+ $("umem").textContent=b.mem.toLocaleString("en-GB");$("umems").textContent=r.tp?`one instance, spread over ${N} node${ns}`:`${b.memN.toLocaleString("en-GB")} per node × ${N} node${ns}`;
+ $("uspd").textContent=b.spd.toLocaleString("en-GB");$("uspds").textContent=!b.spd?`even one user can't reach ${T} tok/s`:r.tp?`one instance, all ${N} node${ns}' bandwidth`:`${b.spdN} per node × ${N}`;
+ const v=$("bverdict"),lim=Math.min(b.mem,b.spd,b.cap);
+ const usedPct=U=>(r.tp?(r.w+U*b.kvU)/N:(r.w+(U/N)*b.kvU))/r.res*100;
+ if(b.spd===0){v.style.color="var(--red)";v.textContent=`This server can't give even one user ${T} tokens per second with ${m.n}. More channels, faster memory, INT8 weights, tensor parallel, or a smaller model.`;}
+ else if(lim===b.spd){v.style.color="var(--ink)";v.textContent=`Bandwidth is the limit: about ${b.spd.toLocaleString("en-GB")} users. At that load each node uses ${fmt(usedPct(b.spd),0)}% of what vLLM reserves; the memory could hold ${fmt(b.mem/Math.max(1,b.spd),0)}× more users than the bandwidth can serve.`;}
+ else if(lim===b.mem){v.style.color="var(--ink)";v.textContent=`Memory is the limit: about ${b.mem.toLocaleString("en-GB")} users. Bigger DIMMs, shorter context or fewer users per instance would raise it.`;}
+ else{v.style.color="var(--ink)";v.textContent=`vLLM's sequence cap is the limit: ${st.seqs} per instance × ${r.inst} instance${r.inst>1?"s":""} = ${b.cap.toLocaleString("en-GB")} users. The memory could hold ${b.mem.toLocaleString("en-GB")} and the bandwidth could serve ${b.spd.toLocaleString("en-GB")} at ${T} tok/s, so raise --max-num-seqs${r.tp?" or run more instances":""}.`;}
  /* chart: speed each user sees vs total users */
  const svg=$("bchart"),W=Math.max(280,svg.parentElement.clientWidth-24),H=W<520?260:300,pl=44,pr=16,pt=20,pb=44;
- const umax=Math.max(8,Math.ceil(Math.max(b.mem*1.06,b.spd*1.6,r.nodes*4)));
- const y0=b.per(0),ymax=Math.max(y0,T)*1.15;
+ const umax=Math.max(8,Math.ceil(Math.max(Math.min(b.mem,Math.max(b.cap,b.spd)*3)*1.06,b.spd*1.6,b.cap*1.1,N*4)));
+ const y0=b.per(1),ymax=Math.max(y0,T)*1.15;
  const X=u=>pl+u/umax*(W-pl-pr),Y=t=>H-pb-Math.min(t,ymax)/ymax*(H-pt-pb);
- const st_=ymax>80?20:ymax>40?10:ymax>16?5:2;
+ const st_=ymax>400?100:ymax>160?40:ymax>80?20:ymax>40?10:ymax>16?5:2;
  let g='<g class="grid">';for(let t=0;t<=ymax;t+=st_)g+=`<line x1="${pl}" x2="${W-pr}" y1="${Y(t)}" y2="${Y(t)}"/><text class="ax" x="${pl-8}" y="${Y(t)+4}" text-anchor="end">${t}</text>`;
- const xs=umax>2000?500:umax>800?200:umax>400?100:umax>150?50:umax>60?20:10;
+ const xs=umax>4000?1000:umax>2000?500:umax>800?200:umax>400?100:umax>150?50:umax>60?20:10;
  for(let u=0;u<=umax;u+=xs)g+=`<text class="ax" x="${X(u)}" y="${H-pb+18}" text-anchor="middle">${u}</text>`;
  g+=`</g><text class="axt" x="${(pl+W-pr)/2}" y="${H-6}" text-anchor="middle">Concurrent users on the server</text><text class="axt" x="${pl-36}" y="${pt-6}">Speed each user can see, tok/s</text>`;
- let d="";for(let i=0;i<=120;i++){const u=umax*i/120;d+=(i?"L":"M")+X(u).toFixed(1)+" "+Y(b.per(u)).toFixed(1);}
+ let d="";for(let i=0;i<=120;i++){const u=Math.max(1,umax*i/120);d+=(i?"L":"M")+X(umax*i/120).toFixed(1)+" "+Y(b.per(u)).toFixed(1);}
  let o=`<path class="curve" d="${d}"/>`;
  o+=`<line class="tl" x1="${pl}" x2="${W-pr}" y1="${Y(T)}" y2="${Y(T)}"/><text class="tag" x="${W-pr}" y="${Y(T)-6}" text-anchor="end" style="fill:light-dark(#9a5b00,#f2b45a)">${T} tok/s target</text>`;
- if(b.spd>0){o+=`<line class="sl" x1="${X(b.spd)}" x2="${X(b.spd)}" y1="${pt}" y2="${H-pb}"/><text class="tag" x="${X(b.spd)+6}" y="${pt+12}" style="fill:var(--ok)">speed limit · ${b.spd}</text>`;}
+ if(b.spd>0&&b.spd<=umax){o+=`<line class="sl" x1="${X(b.spd)}" x2="${X(b.spd)}" y1="${pt}" y2="${H-pb}"/><text class="tag" x="${X(b.spd)+6}" y="${pt+12}" style="fill:var(--ok)">speed limit · ${b.spd.toLocaleString("en-GB")}</text>`;}
+ if(b.cap<=umax){const cx=X(b.cap),left=cx>W-pr-150;o+=`<line class="cl" x1="${cx}" x2="${cx}" y1="${pt}" y2="${H-pb}"/><text class="tag" x="${left?cx-6:cx+6}" y="${pt+48}" text-anchor="${left?"end":"start"}" style="fill:var(--mute)">sequence cap · ${b.cap.toLocaleString("en-GB")}</text>`;}
  if(b.mem<=umax){const mx=X(b.mem),left=mx>W-pr-150;o+=`<line class="ml" x1="${mx}" x2="${mx}" y1="${pt}" y2="${H-pb}"/><text class="tag" x="${left?mx-6:mx+6}" y="${pt+30}" text-anchor="${left?"end":"start"}" style="fill:var(--red)">memory full · ${b.mem.toLocaleString("en-GB")}</text>`;}
  o+=`<line class="hov" id="bhov" x1="0" x2="0" y1="${pt}" y2="${H-pb}" style="display:none"/><rect id="bhit" x="${pl}" y="${pt}" width="${W-pl-pr}" height="${H-pt-pb}" fill="transparent"/>`;
  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.setAttribute("height",H);svg.innerHTML=g+o;
  svg._p={X,umax,pl,pr,W,b,r};
  /* the worked sum */
- const kvTokKB=r.kvTok/1024;
+ const kvTokKB=r.kvTok/1024,bwTxt=r.tp?`${fmt(r.bwN,0)} GB/s peak per node × ${st.eff}% × ${N} node${ns} = ${fmt(r.bwT,0)} GB/s`:`${fmt(r.bwN,0)} GB/s peak per node × ${st.eff}% = ${fmt(r.bwE,0)} GB/s`;
+ const moeTxt=m.moe?` For this mixture-of-experts model a step reads ${fmt(r.rd(1))} GB with one user, rising towards ${fmt(r.w)} GB as the batch touches more experts.`:"";
  $("bsteps").innerHTML=[
-  ["1 · Room per node",`${fmt(r.node,0)} GB node × 0.92 = ${fmt(r.node*RES,0)} GB for vLLM, minus ${fmt(r.w)} GB of weights = <b>${fmt(b.room,0)} GB</b> for the KV cache.`],
-  ["2 · Memory per user",`${fk(CTX[st.c])} tokens × ${st.f}% used × ${fmt(kvTokKB,0)} KB per token${m.st?` + ${m.st} MB fixed state`:""} = <b>${fmt(b.kvU,2)} GB</b>.`],
-  ["3 · Users by memory",`${fmt(b.room,0)} ÷ ${fmt(b.kvU,2)} = ${b.memN.toLocaleString("en-GB")} per node, × ${r.nodes} = <b>${b.mem.toLocaleString("en-GB")}</b>.`],
-  ["4 · Users by bandwidth",`Each token step reads the weights once plus every user's KV cache. For ${T} tok/s: ${fmt(r.bwN,0)} GB/s ÷ ${T} = ${fmt(r.bwN/T)} GB per step, minus ${fmt(r.w)} GB weights, ÷ ${fmt(b.kvU,2)} GB = ${b.spdN} per node, × ${r.nodes} = <b>${b.spd.toLocaleString("en-GB")}</b>.`]
- ].map(([h,p])=>`<article><h3>${h}</h3><p>${p}</p></article>`).join("")+`<article><h3>What this leaves out</h3><p>The bandwidth answer is a ceiling: it uses peak bandwidth and ignores compute, prompt processing and software overhead, so real numbers land lower. vLLM also caps sequences per instance (<code>--max-num-seqs</code>). Benchmark with real prompts before committing.</p></article>`;
+  ["1 · Room per node",r.tp?`${fmt(r.node,0)} GB node × 0.92 = ${fmt(r.res,0)} GB for vLLM, minus 1/${N} of ${fmt(r.w)} GB of weights = <b>${fmt(b.room,0)} GB</b> for this node's share of the KV cache.`:`${fmt(r.node,0)} GB node × 0.92 = ${fmt(r.res,0)} GB for vLLM, minus ${fmt(r.w)} GB of weights = <b>${fmt(b.room,0)} GB</b> for the KV cache.`],
+  ["2 · Memory per user",`${fk(CTX[st.c])} tokens × ${st.f}% used × ${fmt(kvTokKB,0)} KB per token${m.st?` + ${m.st} MB fixed state`:""} = <b>${fmt(b.kvU,2)} GB</b>${r.tp&&N>1?`, split ${fmt(b.kvU/N,3)} GB per node`:""}.`],
+  ["3 · Users by memory",r.tp?`${fmt(b.room,0)} ÷ ${fmt(b.kvU/N,3)} = <b>${b.mem.toLocaleString("en-GB")}</b>.`:`${fmt(b.room,0)} ÷ ${fmt(b.kvU,2)} = ${b.memN.toLocaleString("en-GB")} per node, × ${N} = <b>${b.mem.toLocaleString("en-GB")}</b>.`],
+  ["4 · Users by bandwidth",`Each token step reads the weights once plus every user's KV cache, from ${bwTxt}. The most users who still each get ${T} tok/s: <b>${b.spd.toLocaleString("en-GB")}</b>${r.tp?"":` (${b.spdN} per node × ${N})`}.${moeTxt}`],
+  ["5 · vLLM's sequence cap",`<code>--max-num-seqs</code> ${st.seqs} × ${r.inst} instance${r.inst>1?"s":""} = <b>${b.cap.toLocaleString("en-GB")}</b> sequences decoding at once.`]
+ ].map(([h,p])=>`<article><h3>${h}</h3><p>${p}</p></article>`).join("")+`<article><h3>What this leaves out</h3><p>The bandwidth answer is a ceiling: it uses ${st.eff}% of peak bandwidth and ignores compute, prompt processing and software overhead${r.tp?", and the communication between nodes that tensor parallel adds":""}, so real numbers land lower. Benchmark with real prompts before committing.</p></article>`;
 }
 function drawAll(r){drawChart(r);drawTable(r);drawBack(r);}
-function tipFor(el){const r=calc();return el.dataset.names.split(",").map(n=>{const c=CPU.find(x=>x.n===n),k=skuNums(c,r);return `<b>Xeon ${n}</b> · ${c.c} cores · ${c.w} W<br>${c.ch} channels · ${k.mr?"MRDIMM-"+k.mt:"DDR5-6400"} · ${c.sc.replace("_","/")}<br>${fmt(k.bwN,0)} GB/s per node → ${fmt(k.ceil,0)} tok/s`;}).join("<hr style='border:0;border-top:1px solid currentColor;opacity:.3;margin:6px 0'>")+"<br><span style='opacity:.75'>Click to see it in the table</span>";}
+function tipFor(el){const r=calc();return el.dataset.names.split(",").map(n=>{const c=CPU.find(x=>x.n===n),k=skuNums(c,r);return `<b>Xeon ${n}</b> · ${c.c} cores · ${c.w} W<br>${c.ch} channels · ${k.mm.lab} · ${c.sc.replace("_","/")}<br>${fmt(k.bwE,0)} GB/s per node at ${st.eff}%${r.tp?" × "+k.nodes+" nodes":""} → ${ft(k.ceil)} tok/s`;}).join("<hr style='border:0;border-top:1px solid currentColor;opacity:.3;margin:6px 0'>")+"<br><span style='opacity:.75'>Click to see it in the table</span>";}
 function showTip(el){const t=$("ctip"),box=$("chart").parentElement.getBoundingClientRect(),b=el.querySelector("circle.m").getBoundingClientRect();t.innerHTML=tipFor(el);t.style.opacity=1;let x=b.left-box.left+14,y=b.top-box.top-10;t.style.left="0px";t.style.top="0px";const tw=t.offsetWidth,th=t.offsetHeight;if(x+tw>box.width-8)x=b.left-box.left-tw-8;if(y-th<0)y=b.bottom-box.top+th+8;t.style.left=Math.max(4,x)+"px";t.style.top=(y-th)+"px";}
 function hideTip(){$("ctip").style.opacity=0;}
 function goRow(names){const n=names.split(",");const rows=n.map(x=>$("row-"+x)).filter(Boolean);if(!rows.length)return;rows[0].scrollIntoView({behavior:"smooth",block:"center"});for(const tr of rows){tr.classList.remove("flash");void tr.offsetWidth;tr.classList.add("flash");}}
 function pct(x,a){return Math.max(0,x/a*100)+"%";}
 function lab(el,v,a,px){el.textContent=v/a*px>64?fmt(v)+" GB":"";}
+function tpOK(H,N){return N<=H?H%N===0:N%H===0;}
 function render(){
- const r=calc(),m=r.m,c=r.c;
+ norm();
+ const r=calc(),m=r.m,c=r.c,N=r.nodes;
  $("model").value=String(st.m);$("ctx").value=st.c;$("users").value=st.u;$("fill").value=st.f;
- $("cpu").value=st.cpu;for(const o of $("sock").options)o.disabled=!c.sk.includes(+o.value);$("sock").value=String(r.so);$("sockhint").textContent=`Intel ARK lists Xeon ${c.n} as ${scTxt[c.sc]}.`;$("nps").value=String(st.np);$("dimm").value=String(st.dm);
- if(!c.mr&&st.me==="mr")st.me="ddr";
- $("mem").value=st.me;$("mem").options[1].disabled=!c.mr;$("mem").options[1].textContent=c.mr?`MRDIMM-${c.mr}`:"MRDIMM (not on this SKU)";$("mem").options[0].textContent=`DDR5-${DDR} RDIMM`;
- $("memhint").textContent=c.mr?"":`Xeon ${c.n} runs DDR5 only.`;
+ $("cpu").value=st.cpu;for(const o of $("sock").options)o.disabled=!c.sk.includes(+o.value);$("sock").value=String(r.so);$("sockhint").textContent=`Intel ARK lists Xeon ${c.n} as ${scTxt[c.sc]}.`;
+ for(const o of $("nps").options)o.disabled=!NPS[c.f].includes(+o.value);
+ $("nps").options[0].textContent=c.f==="6900P"?"1 (HEX, all dies as one)":"1 (sub-NUMA off)";
+ $("nps").value=String(st.np);
+ $("npshint").innerHTML=(c.f==="6900P"?`Xeon 6900P has three compute dies, each with four memory channels: SNC3 (three nodes, the default) or HEX (one node).`:c.f==="6700P"?`SNC2 exists only on two-die 6700P parts, such as the 86-core ones; one-die parts always show one node.`:`Xeon 6500P has one compute die, so one NUMA node per socket.`)+` Check yours with <code>numactl -H</code>.`;
+ $("dimm").value=String(st.dm);
+ $("dpc").options[1].disabled=c.f==="6900P";$("dpc").options[1].textContent=c.f==="6900P"?"2 per channel (not on 6900P)":"2 per channel (more capacity, DDR5-5200)";$("dpc").value=String(st.dpc);
+ const mo=$("mem").options;
+ mo[1].disabled=c.f!=="6700P"||st.dpc===2;mo[1].textContent=c.f==="6700P"?"DDR5-8000 RDIMM (select SKUs, BIOS update)":"DDR5-8000 RDIMM (6700P only)";
+ mo[2].disabled=!c.mr||st.dpc===2;mo[2].textContent=c.mr?`MRDIMM-${c.mr}`:"MRDIMM (not on this SKU)";
+ $("mem").value=st.me;
+ $("memhint").textContent=st.dpc===2?"Two DIMMs per channel double the capacity but run DDR5 at 5200 MT/s, and rule out MRDIMM and DDR5-8000."
+  :st.me==="d8"?"Intel is enabling DDR5-8000 at one DIMM per channel on select Xeon 6700P SKUs through a platform and BIOS update. Confirm the SKU and board with the server maker."
+  :st.me==="mr"?`Xeon ${c.f} runs MRDIMM at up to ${c.mr} MT/s.`
+  :c.mr?"":`Xeon ${c.n} has no MRDIMM support.`;
+ $("effo").textContent=st.eff+"% of peak";$("eff").value=st.eff;
+ $("par").value=st.par;$("wp").value=st.wp;$("seqs").value=String(st.seqs);
+ $("parhint").innerHTML=st.par==="tp"
+  ?`One vLLM instance with <code>--tensor-parallel-size ${N}</code>, as Intel's vLLM guide sets it: each node holds 1/${N} of the weights and KV cache, and every user gets all ${N} nodes' bandwidth, minus some lost to communication between nodes.`+(N>1&&!tpOK(m.H,N)?` <b style="color:var(--red)">${m.n} has ${m.H} KV heads, which don't split evenly across ${N} nodes; vLLM won't start with this tensor-parallel size.</b>`:"")
+  :`Each NUMA node runs its own copy of the model, and the users are split between them.`;
  $("ctxo").textContent=fk(r.ctx)+" tokens";$("userso").textContent=st.u;$("fillo").textContent=st.f+"%";
  $("mmax").textContent="max "+fk(m.max)+(m.moe?" · "+m.moe+"B active":"");
  $("cpuo").textContent=c.c+" cores · "+c.w+" W";
  $("ark").href=ark(c.n);$("ark").textContent=`Check Xeon ${c.n} on Intel ARK ↗`;
  $("tab1").href=p1link();$("srcp1").href=p1link();
  $("hostbig").textContent=`${r.dimms} × ${st.dm} GB = ${r.host>=1024?fmt(r.host/1024,r.host%1024?1:0)+" TB":r.host+" GB"}`;
- const v=$("verdict");
- if(!r.fits){v.className="verdict no";v.textContent=`Too big for one NUMA node (${fmt(r.hr)} GB needed, ${fmt(r.node)} GB per node). Cut context first, then users, then bigger DIMMs.`;}
- else if(!r.cls){v.className="verdict mid";v.textContent=`Fits the node, but above the catalog's largest class (96 GB). Cut context or split users across more nodes.`;}
- else{v.className="verdict yes";v.textContent=`${r.inst} instance${r.inst>1?"s":""}, about ${r.up} user${r.up>1?"s":""} each, every one in the ${r.cls} GB class with ${fmt(r.node-r.hr)} GB to spare per node.`;}
+ const v=$("verdict"),spare=fmt(r.res-r.share),near=r.cls?`nearest catalog size ${r.cls} GB`:`above the catalog's largest starting size (96 GB), which is fine: those sizes are only starting points`;
+ if(!r.fits){v.className="verdict no";v.textContent=r.tp?`Too big: each node's share needs ${fmt(r.hrN)} GB after ÷ 0.92, and a node has ${fmt(r.node)} GB. Cut context first, then users, then bigger DIMMs.`:`Too big for one NUMA node (${fmt(r.hr)} GB needed, ${fmt(r.node)} GB per node). Cut context first, then users, then bigger DIMMs${N>1?", or try tensor parallel":""}.`;}
+ else if(r.tp){v.className="verdict yes";v.textContent=`1 instance across ${N} node${N>1?"s":""} with all ${st.u} users: ${fmt(r.hr)} GB to plan for in total (${near}). Each node holds ${fmt(r.share)} GB of it, leaving ${spare} GB of vLLM's reservation unused per node.`;}
+ else{v.className="verdict yes";v.textContent=`${r.inst} instance${r.inst>1?"s":""}, about ${r.up} user${r.up>1?"s":""} each: ${fmt(r.hr)} GB to plan for per instance (${near}), leaving ${spare} GB of vLLM's reservation unused per node.`;}
  /* layer 1 */
  const a1=Math.max(100,Math.ceil(r.hr*1.12/16)*16),bw1=$("bar1").clientWidth||600;
  $("w1").style.width=pct(r.w,a1);$("k1").style.width=pct(r.kv,a1);$("s1").style.width=pct(r.sg,a1);
@@ -401,37 +494,38 @@ function render(){
  const marks=CLASSES.concat(a1>140?[128]:[]).concat(a1>300?[256]:[]).filter(k=>k<a1);
  $("ticks1").innerHTML=marks.map(k=>`<div class="tick${k===r.cls?" on":""}" style="left:${k/a1*100}%">${k} GB</div>`).join("")+`<div class="need" style="left:${Math.min(r.hr/a1*100,99.5)}%" title="Need ÷ 0.92"></div>`;
  $("l1s").textContent=`${fmt(r.need)} GB for ${r.up} user${r.up>1?"s":""}; ÷ 0.92 = ${fmt(r.hr)} GB (orange line)`;
- /* layer 2 */
- const a2=Math.max(r.node,r.need),bw2=$("bar2").clientWidth||600,used=Math.min(r.need,r.res);
- const sc=r.need>a2?a2/r.need:1;
+ /* layer 2: what lands on one node */
+ const a2=Math.max(r.node,r.share),bw2=$("bar2").clientWidth||600,used=Math.min(r.share,r.res);
+ const sc=(r.share>a2?a2/r.share:1)*r.sh;
  $("w2").style.width=pct(r.w*sc,a2);$("k2").style.width=pct(r.kv*sc,a2);$("s2").style.width=pct(r.sg*sc,a2);
- $("r2").style.width=pct(Math.max(0,r.res-used),a2);$("o2").style.width=pct(r.fits?r.node-r.res:Math.max(0,r.node-r.need),a2);
- lab($("w2"),r.w,a2,bw2);lab($("k2"),r.kv,a2,bw2);$("s2").textContent="";
+ $("r2").style.width=pct(Math.max(0,r.res-used),a2);$("o2").style.width=pct(r.fits?r.node-r.res:Math.max(0,r.node-r.share),a2);
+ lab($("w2"),r.w*r.sh,a2,bw2);lab($("k2"),r.kv*r.sh,a2,bw2);$("s2").textContent="";
  $("r2").textContent=(r.res-used)/a2*bw2>110?"reserved, unused":"";$("o2").textContent=(r.node-r.res)/a2*bw2>40?"OS":"";
- $("cap2").innerHTML=`<span>Instance uses <b>${fmt(r.need)} GB</b></span><span>vLLM reserves <b>${fmt(r.res)} GB</b> (92%)</span><span>Node <b>${fmt(r.node)} GB</b></span>`;
- $("l2s").textContent=`${r.nodes} node${r.nodes>1?"s":""}, one instance each`;
+ $("cap2").innerHTML=`<span>${r.tp&&N>1?`This node's 1/${N} share`:"Instance uses"} <b>${fmt(r.share)} GB</b></span><span>vLLM reserves <b>${fmt(r.res)} GB</b> (92%)</span><span>Node <b>${fmt(r.node)} GB</b></span>`;
+ $("node0hint").textContent=`vLLM checks the memory available on the node at startup. Node 0 also carries the OS and the page cache of the model files, so leave it some headroom${r.fits&&r.node-r.res<16?"; with only "+fmt(r.node-r.res)+" GB left over here, it may fail to start on node 0":""}.`;
+ $("l2s").textContent=r.tp?`1 instance spread over ${N} node${N>1?"s":""}`:`${N} node${N>1?"s":""}, one instance each`;
  /* layer 3 */
- const cols=c.ch,per=r.chn,shade=n=>n%2?"var(--n2)":"var(--blue)";
+ const cols=c.ch,per=r.chn,shade=n=>n%2?"var(--n2)":"var(--blue)",sl=(r.mm.d>1?"2×":"")+st.dm;
  let h="";
  for(let s=0;s<r.so;s++){
-  h+=`<div class="sock"><h4>Socket ${s} <span>${c.ch} channels · ${fmt(r.bwS,0)} GB/s</span></h4><div class="slots" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">`;
-  for(let i=0;i<cols;i++){const n=Math.floor(i/per);h+=`<div class="slot" style="background:${shade(n)}" title="Channel ${i}, NUMA node ${s*st.np+n}">${cols<=8?st.dm:""}</div>`;}
-  h+=`</div><div class="nodes" style="grid-template-columns:repeat(${st.np},minmax(0,1fr))">`;
-  for(let n=0;n<st.np;n++)h+=`<div>node ${s*st.np+n} · ${fmt(r.node,0)} GB</div>`;
+  h+=`<div class="sock"><h4>Socket ${s} <span>${c.ch} channels · ${fmt(r.bwS,0)} GB/s peak</span></h4><div class="slots" style="grid-template-columns:repeat(${cols},minmax(0,1fr))">`;
+  for(let i=0;i<cols;i++){const n=Math.floor(i/per);h+=`<div class="slot" style="background:${shade(n)}" title="Channel ${i}, NUMA node ${s*r.np+n}${r.mm.d>1?", 2 DIMMs":""}">${cols<=8?sl:""}</div>`;}
+  h+=`</div><div class="nodes" style="grid-template-columns:repeat(${r.np},minmax(0,1fr))">`;
+  for(let n=0;n<r.np;n++)h+=`<div>node ${s*r.np+n} · ${fmt(r.node,0)} GB</div>`;
   h+=`</div></div>`;
  }
  $("host").innerHTML=h;
- $("l3s").textContent=`${r.so} × ${c.ch} channels, ${r.mr?"MRDIMM":"DDR5"}-${r.mt}`;
+ $("l3s").textContent=`${r.so} × ${c.ch} channels, ${r.mm.lab}`;
  $("nums").innerHTML=[
   [fmt(r.hr)+" GB","Instance need ÷ 0.92"],
-  [r.cls?r.cls+" GB":"> 96 GB","Catalog class"],
+  [r.cls?r.cls+" GB":"> 96 GB","Nearest catalog size"],
   [fmt(r.node,0)+" GB","Memory per node"],
   [fmt(r.bwN,0)+" GB/s","Peak bandwidth per node"],
-  [fmt(r.ceil,0)+" tok/s","Ceiling for one user"],
+  [ft(r.ceil)+" tok/s",`Ceiling for one user, at ${st.eff}%`],
   [fmt(r.kvTok/1024,0)+" KB","KV cache per token"]
  ].map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join("");
  drawAll(r);
- const p=new URLSearchParams({m:st.m,c:st.c,u:st.u,f:st.f,cpu:st.cpu,so:r.so,np:st.np,dm:st.dm,me:st.me});
+ const p=new URLSearchParams({m:st.m,c:st.c,u:st.u,f:st.f,cpu:st.cpu,so:r.so,np:r.np,dm:st.dm,me:st.me,dpc:st.dpc,ef:st.eff,pa:st.par,wp:st.wp,sq:st.seqs});
  if(st.custom)for(const k of["L","kvL","H","d","B","st"])p.set(k,st.custom[k]);
  history.replaceState(null,"","?"+p);
 }
@@ -439,24 +533,33 @@ function p1link(){const p=new URLSearchParams({m:st.m,c:st.c,u:Math.min(st.u,64)
 /* server settings from a shared link */
 if(q.has("cpu")&&CPU.some(c=>c.n===q.get("cpu")))st.cpu=q.get("cpu");
 if(["1","2","4","8"].includes(q.get("so")))st.so=+q.get("so");
-if(["1","2","3"].includes(q.get("np")))st.np=+q.get("np");
+if(["1","2","3"].includes(q.get("np")))st.np=+q.get("np");else st.np=NPD[cur().f];
 if(["16","32","64","96","128"].includes(q.get("dm")))st.dm=+q.get("dm");
-if(["ddr","mr"].includes(q.get("me")))st.me=q.get("me");
-const touch=()=>render();
-$("model").addEventListener("change",e=>{st.m=+e.target.value;touch();});
-$("ctx").addEventListener("input",e=>{st.c=+e.target.value;touch();});
-$("users").addEventListener("input",e=>{st.u=+e.target.value;touch();});
-$("fill").addEventListener("input",e=>{st.f=+e.target.value;touch();});
-$("cpu").addEventListener("change",e=>{st.cpu=e.target.value;touch();});
-$("sock").addEventListener("change",e=>{st.so=+e.target.value;touch();});
-$("cpu").addEventListener("change",()=>{const c=CPU.find(x=>x.n===st.cpu);st.so=c.sk.includes(2)?2:c.sk[0];render();});
-$("nps").addEventListener("change",e=>{st.np=+e.target.value;touch();});
-$("dimm").addEventListener("change",e=>{st.dm=+e.target.value;touch();});
-$("mem").addEventListener("change",e=>{st.me=e.target.value;touch();});
+if(["ddr","d8","mr"].includes(q.get("me")))st.me=q.get("me");
+if(["1","2"].includes(q.get("dpc")))st.dpc=+q.get("dpc");
+if(q.has("ef")){const e=+q.get("ef");if(e>=50&&e<=100)st.eff=Math.round(e/5)*5;}
+if(["dp","tp"].includes(q.get("pa")))st.par=q.get("pa");
+if(["bf16","int8"].includes(q.get("wp")))st.wp=q.get("wp");
+if(["64","128","256","512"].includes(q.get("sq")))st.seqs=+q.get("sq");
+const pick=n=>{st.cpu=n;const c=cur();st.so=sockOf(c,2);st.np=NPD[c.f];render();};
+$("model").addEventListener("change",e=>{st.m=+e.target.value;render();});
+$("ctx").addEventListener("input",e=>{st.c=+e.target.value;render();});
+$("users").addEventListener("input",e=>{st.u=+e.target.value;render();});
+$("fill").addEventListener("input",e=>{st.f=+e.target.value;render();});
+$("cpu").addEventListener("change",e=>pick(e.target.value));
+$("sock").addEventListener("change",e=>{st.so=+e.target.value;render();});
+$("nps").addEventListener("change",e=>{st.np=+e.target.value;render();});
+$("dimm").addEventListener("change",e=>{st.dm=+e.target.value;render();});
+$("dpc").addEventListener("change",e=>{st.dpc=+e.target.value;if(st.dpc===2)st.me="ddr";render();});
+$("mem").addEventListener("change",e=>{st.me=e.target.value;if(st.me!=="ddr")st.dpc=1;render();});
+$("eff").addEventListener("input",e=>{st.eff=+e.target.value;render();});
+$("par").addEventListener("change",e=>{st.par=e.target.value;render();});
+$("wp").addEventListener("change",e=>{st.wp=e.target.value;render();});
+$("seqs").addEventListener("change",e=>{st.seqs=+e.target.value;render();});
 const bc=$("bchart");
 bc.addEventListener("mousemove",e=>{const P=bc._p;if(!P)return;const rc=bc.getBoundingClientRect(),x=(e.clientX-rc.left)*(P.W/rc.width);if(x<P.pl||x>P.W-P.pr){$("btip").style.opacity=0;$("bhov").style.display="none";return;}
- const u=Math.round((x-P.pl)/(P.W-P.pl-P.pr)*P.umax),h=$("bhov");h.setAttribute("x1",x);h.setAttribute("x2",x);h.style.display="";
- const t=$("btip");t.innerHTML=`<b>${u.toLocaleString("en-GB")} users</b><br>about ${fmt(P.b.per(u),1)} tok/s each (ceiling)`+(u>P.b.mem?"<br>beyond what memory can hold":"");t.style.opacity=1;
+ const u=Math.max(1,Math.round((x-P.pl)/(P.W-P.pl-P.pr)*P.umax)),h=$("bhov");h.setAttribute("x1",x);h.setAttribute("x2",x);h.style.display="";
+ const t=$("btip");t.innerHTML=`<b>${u.toLocaleString("en-GB")} users</b><br>about ${fmt(P.b.per(u),1)} tok/s each (ceiling)`+(u>P.b.mem?"<br>beyond what memory can hold":"")+(u>P.b.cap?"<br>beyond vLLM's sequence cap":"");t.style.opacity=1;
  const bx=bc.parentElement.getBoundingClientRect();let lx=e.clientX-bx.left+12;if(lx+t.offsetWidth>bx.width-6)lx=e.clientX-bx.left-t.offsetWidth-12;t.style.left=lx+"px";t.style.top=(e.clientY-bx.top-t.offsetHeight-10)+"px";});
 bc.addEventListener("mouseleave",()=>{$("btip").style.opacity=0;const h=$("bhov");if(h)h.style.display="none";});
 $("tgt").addEventListener("input",()=>render());
@@ -467,7 +570,7 @@ ch.addEventListener("focusin",e=>{const p=e.target.closest(".pt");if(p)showTip(p
 ch.addEventListener("focusout",hideTip);
 ch.addEventListener("click",e=>{const p=e.target.closest(".pt");if(p){hideTip();goRow(p.dataset.names);}});
 ch.addEventListener("keydown",e=>{const p=e.target.closest(".pt");if(p&&(e.key==="Enter"||e.key===" ")){e.preventDefault();hideTip();goRow(p.dataset.names);}});
-$("skbody").addEventListener("click",e=>{const b=e.target.closest("button[data-use]");if(!b)return;st.cpu=b.dataset.use;const c=CPU.find(x=>x.n===st.cpu);st.so=c.sk.includes(2)?2:c.sk[0];render();$("hostbig").scrollIntoView({behavior:"smooth",block:"center"});});
+$("skbody").addEventListener("click",e=>{const b=e.target.closest("button[data-use]");if(!b)return;pick(b.dataset.use);$("hostbig").scrollIntoView({behavior:"smooth",block:"center"});});
 render();
 new ResizeObserver(()=>render()).observe($("bar1"));
 }
